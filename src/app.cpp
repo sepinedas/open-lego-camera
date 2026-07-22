@@ -41,16 +41,36 @@ bool App::initDisplay() {
     int h = cfg_.windowed ? cfg_.height : 0;
 
     for (const std::string& drv : drivers) {
+        const char* tag = drv.empty() ? "(auto)" : drv.c_str();
         if (drv.empty()) unsetenv("SDL_VIDEODRIVER");
         else setenv("SDL_VIDEODRIVER", drv.c_str(), 1);
 
-        if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0) continue;
+        if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0) {
+            std::cerr << "display: driver '" << tag << "' SDL_Init failed: "
+                      << SDL_GetError() << "\n";
+            continue;
+        }
+
+        // Report what KMS/DRM outputs SDL can see -- the key clue when a screen
+        // stays black (0 displays = no connected HDMI/DPI connector with a mode).
+        int nd = SDL_GetNumVideoDisplays();
+        std::cerr << "display: driver '" << tag << "' up; " << nd
+                  << " output(s) detected\n";
+        for (int i = 0; i < nd; ++i) {
+            SDL_Rect b{};
+            SDL_GetDisplayBounds(i, &b);
+            const char* name = SDL_GetDisplayName(i);
+            std::cerr << "  [" << i << "] " << (name ? name : "?") << " "
+                      << b.w << "x" << b.h << "\n";
+        }
 
         win_ = SDL_CreateWindow("open-lego-camera", SDL_WINDOWPOS_CENTERED,
                                 SDL_WINDOWPOS_CENTERED,
                                 cfg_.windowed ? w : 0, cfg_.windowed ? h : 0,
                                 winFlags);
         if (!win_) {
+            std::cerr << "display: driver '" << tag << "' CreateWindow failed: "
+                      << SDL_GetError() << "\n";
             SDL_QuitSubSystem(SDL_INIT_VIDEO);
             SDL_Quit();
             continue;
@@ -60,6 +80,8 @@ bool App::initDisplay() {
                                   SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
         if (!ren_) ren_ = SDL_CreateRenderer(win_, -1, 0); // software fallback
         if (!ren_) {
+            std::cerr << "display: driver '" << tag << "' CreateRenderer failed: "
+                      << SDL_GetError() << "\n";
             SDL_DestroyWindow(win_);
             win_ = nullptr;
             SDL_Quit();
@@ -76,7 +98,8 @@ bool App::initDisplay() {
     }
 
     std::cerr << "could not open a display. On a headless Pi run this on the "
-                 "active HDMI console (not SSH), or pass --driver.\n";
+                 "active HDMI console (not SSH), or pass --driver. See the "
+                 "\"Debugging HDMI / no display\" section in the README.\n";
     return false;
 }
 

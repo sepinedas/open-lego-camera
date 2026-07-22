@@ -171,6 +171,82 @@ plus a launch from the login shell.
 `exec` replaces the login shell with the app; `Esc`/`Q` (or a crash) drops you
 back to a login prompt.
 
+## Debugging HDMI / no display
+
+Black screen, or "could not open a display"? The output chain is
+**SDL2 → `kmsdrm` → DRM/KMS → HDMI connector**; work down it.
+
+**First, read the app's own startup log.** It now prints what it tried:
+
+```
+display: driver 'kmsdrm' up; 1 output(s) detected
+  [0] HDMI-A-1 1920x1080
+display: kmsdrm 1920x1080
+```
+
+- `0 output(s) detected` → the kernel sees **no connected HDMI** with a mode
+  (cable/EDID/hotplug). Jump to step 3.
+- `CreateWindow failed: ...` → a driver/permission/DRM-master problem. Steps 1–2.
+- No `display:` lines at all, or it exits immediately → not a display issue;
+  check the camera line above it.
+
+**1. Are you on the console, not SSH?** `kmsdrm` must be **DRM master**, which
+means running on the machine's active screen, not a bare SSH shell where the
+`getty` on tty1 holds it. Run it on the Pi's own keyboard/console, from tty1, or
+as a systemd service on the seat. Quick test from SSH: switch the active VT with
+`sudo chvt 1` first, or just `sudo build/open-lego-camera`.
+
+**2. Permissions / contention.**
+```sh
+groups                      # need: video, render, input
+sudo usermod -aG video,render,input "$USER"   # then re-login
+```
+If a desktop (X/Wayland) or another instance is running it will own DRM master
+and `CreateWindow` fails — boot to console (`raspi-config` → *System Options* →
+*Boot / Auto Login* → *Console*) or stop the desktop.
+
+**3. Does the kernel even see the HDMI connector?**
+```sh
+ls /dev/dri/                                   # expect card0/card1 + renderD128
+for s in /sys/class/drm/*/status; do echo "$s = $(cat "$s")"; done
+```
+Look for a line like `card1-HDMI-A-1/status = connected`. If it says
+`disconnected` while a monitor is plugged in, it's a hotplug/EDID issue — in
+`/boot/firmware/config.txt`:
+```ini
+hdmi_force_hotplug=1
+# if still blank, pin a known-good mode (1080p60):
+hdmi_group=1
+hdmi_mode=16
+```
+(These `hdmi_*` keys apply to the legacy path; on KMS you can instead force a
+mode with a kernel arg in `cmdline.txt`, e.g. `video=HDMI-A-1:1920x1080@60`.)
+
+**4. Is KMS actually enabled?** `kmsdrm` needs the full KMS driver:
+```ini
+# /boot/firmware/config.txt
+dtoverlay=vc4-kms-v3d
+```
+Check it loaded: `dmesg | grep -i "drm\|vc4"`.
+
+**5. Prove the pipe independent of this app.** Draw a KMS test pattern straight
+to the connector (no SDL, no app):
+```sh
+sudo apt install libdrm-tests   # provides modetest
+modetest -M vc4 -c              # list connectors + modes
+sudo modetest -M vc4 -s <connector_id>:<mode>   # e.g. -s 32:1920x1080
+```
+If `modetest` shows nothing either, the problem is entirely system-level
+(config.txt / cable / KMS), not the app. If `modetest` works but the app is
+black, tell me and we'll dig into SDL.
+
+**6. HDMI + HyperPixel together.** With the HyperPixel DPI overlay enabled there
+are two connectors; `kmsdrm` renders to the **first connected** one, which may
+be the DPI panel, leaving HDMI dark (or vice-versa). To test HDMI alone,
+comment out the `dtoverlay=vc4-kms-dpi-hyperpixel4` line and reboot. To pick one
+deliberately, force it in `cmdline.txt` with `video=HDMI-A-1:1920x1080@60`
+(and/or disable the other connector).
+
 ## Pimoroni HyperPixel 4.0 (DPI touchscreen)
 
 The HyperPixel 4.0" rectangular is an **800×480 DPI panel** (parallel RGB over
