@@ -164,16 +164,37 @@ void App::pumpEvents() {
                 }
                 break;
             case SDL_MOUSEBUTTONDOWN:
-                onTap(e.button.x, e.button.y);
+                // Ignore mouse events SDL synthesises from touch (which ==
+                // SDL_TOUCH_MOUSEID); the SDL_FINGERDOWN below handles those,
+                // otherwise every tap would fire twice.
+                if (e.button.which != SDL_TOUCH_MOUSEID)
+                    onTap(e.button.x, e.button.y);
                 break;
-            case SDL_FINGERDOWN:
+            case SDL_FINGERDOWN: {
                 // Touch coords are normalised 0..1 on KMSDRM.
-                onTap((int)(e.tfinger.x * screenW_), (int)(e.tfinger.y * screenH_));
+                int px, py;
+                mapTouch(e.tfinger.x, e.tfinger.y, px, py);
+                onTap(px, py);
                 break;
+            }
             default:
                 break;
         }
     }
+}
+
+void App::mapTouch(float nx, float ny, int& px, int& py) const {
+    float x = nx, y = ny;
+    switch (cfg_.touchRotate) {          // clockwise, on the unit square
+        case 90:  { float t = x; x = 1.f - y; y = t; break; }
+        case 180: x = 1.f - x; y = 1.f - y; break;
+        case 270: { float t = x; x = y; y = 1.f - t; break; }
+        default:  break;
+    }
+    if (cfg_.touchFlipX) x = 1.f - x;
+    if (cfg_.touchFlipY) y = 1.f - y;
+    px = std::min(screenW_ - 1, std::max(0, (int)(x * screenW_)));
+    py = std::min(screenH_ - 1, std::max(0, (int)(y * screenH_)));
 }
 
 void App::onTap(int x, int y) {

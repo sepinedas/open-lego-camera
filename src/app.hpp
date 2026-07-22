@@ -39,6 +39,9 @@ private:
     // --- input ---
     void pumpEvents();
     void onTap(int x, int y);
+    // Map a normalised (0..1) touch point to screen pixels, applying the
+    // configured rotate/flip so a rotated panel (e.g. HyperPixel) lines up.
+    void mapTouch(float nx, float ny, int& px, int& py) const;
     void dispatch(Action a);
 
     // --- actions ---

@@ -171,6 +171,76 @@ plus a launch from the login shell.
 `exec` replaces the login shell with the app; `Esc`/`Q` (or a crash) drops you
 back to a login prompt.
 
+## Pimoroni HyperPixel 4.0 (DPI touchscreen)
+
+The HyperPixel 4.0" rectangular is an **800×480 DPI panel** (parallel RGB over
+the GPIO header) with an **I²C capacitive touch** controller — not HDMI and not
+DSI. On a current Raspberry Pi OS (Bookworm, `vc4-kms-v3d`) it comes up as a
+normal **DRM/KMS** output, so this app drives it through the same `kmsdrm` path
+— you just need to enable the panel and align the touch.
+
+### 1. Enable the panel
+
+Add the HyperPixel4 KMS overlay to `/boot/firmware/config.txt` (make sure the
+KMS driver is active and the panel isn't fighting HDMI for the console):
+
+```ini
+# Full KMS (usually already present)
+dtoverlay=vc4-kms-v3d
+
+# HyperPixel 4.0 rectangular. (Square panel: vc4-kms-dpi-hyperpixel4sq)
+dtoverlay=vc4-kms-dpi-hyperpixel4
+```
+
+Then reboot and confirm the overlay is actually installed and the panel is a
+DRM connector:
+
+```sh
+ls /boot/firmware/overlays | grep -i hyperpixel   # overlay present?
+```
+
+If your OS image doesn't ship the overlay, install Pimoroni's driver first,
+which adds the overlay and the touch setup, then reboot:
+
+```sh
+git clone https://github.com/pimoroni/hyperpixel4
+cd hyperpixel4 && sudo ./install.sh
+```
+
+> **HDMI + HyperPixel together:** SDL's `kmsdrm` renders to the first connected
+> connector, which may be HDMI. For a HyperPixel-only setup, leave HDMI
+> unplugged (or force the connector with a `video=` kernel arg). The console
+> should appear on the HyperPixel once the overlay is active.
+
+### 2. Run it
+
+It's a KMS output, so nothing special is needed — the driver auto-selects
+`kmsdrm`:
+
+```sh
+build/open-lego-camera            # add --driver kmsdrm to force it
+```
+
+The UI is fullscreen and adapts to the panel's 800×480 automatically.
+
+### 3. Align the touch
+
+The HyperPixel's touch controller is commonly **rotated/mirrored** relative to
+the panel, so a tap may land in the wrong place. Correct it entirely in the app
+— no X11/libinput calibration needed — with:
+
+```sh
+build/open-lego-camera --touch-rotate 90                 # try 0/90/180/270
+build/open-lego-camera --touch-rotate 90 --touch-flip-x  # add flips if needed
+```
+
+Find the right combination by tapping the shutter (bottom row) and watching
+where the press registers: pick the `--touch-rotate` that makes vertical taps
+track vertically, then add `--touch-flip-x`/`--touch-flip-y` if an axis is
+mirrored. If you rotate the **display** via the overlay (a `rotate=` parameter),
+match `--touch-rotate` to it. Once found, bake the flags into your autostart
+line.
+
 ## Menu icons
 
 | Icon | Action |

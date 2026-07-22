@@ -15,6 +15,9 @@ struct Config {
     bool audio = true;       // record sound with videos when a mic is present
     int webcamIndex = -1;    // force a specific /dev/videoN (-1 = probe)
     std::string picamName;   // libcamera camera-name to select when several exist
+    int touchRotate = 0;     // rotate touch coords 0/90/180/270 to match the panel
+    bool touchFlipX = false; // mirror touch horizontally
+    bool touchFlipY = false; // mirror touch vertically
     int width = 1280;        // requested preview width
     int height = 720;        // requested preview height
 };

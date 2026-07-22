@@ -25,6 +25,10 @@ static void printUsage(const char* prog) {
         "  --picam-name NAME            libcamera camera id to select (see\n"
         "                               `rpicam-hello --list-cameras`)\n"
         "  --size WxH                   requested preview size (default: 1280x720)\n"
+        "  --touch-rotate 0|90|180|270  rotate touch to match a rotated panel\n"
+        "                               (e.g. Pimoroni HyperPixel)\n"
+        "  --touch-flip-x               mirror touch horizontally\n"
+        "  --touch-flip-y               mirror touch vertically\n"
         "  --driver NAME                force SDL video driver (kmsdrm, fbcon, x11)\n"
         "  --windowed                   run in a window instead of fullscreen\n"
         "  --no-audio                   record video without sound\n"
@@ -77,6 +81,18 @@ bool parseArgs(int argc, char** argv, Config& out, int* exitCode) {
         } else if (a == "--picam-name") {
             const char* v = need(i); if (!v) return false;
             out.picamName = v;
+        } else if (a == "--touch-rotate") {
+            const char* v = need(i); if (!v) return false;
+            out.touchRotate = std::atoi(v);
+            if (out.touchRotate != 0 && out.touchRotate != 90 &&
+                out.touchRotate != 180 && out.touchRotate != 270) {
+                std::cerr << "bad --touch-rotate (0|90|180|270): " << v << "\n";
+                *exitCode = 2; return false;
+            }
+        } else if (a == "--touch-flip-x") {
+            out.touchFlipX = true;
+        } else if (a == "--touch-flip-y") {
+            out.touchFlipY = true;
         } else if (a == "--size") {
             const char* v = need(i); if (!v) return false;
             if (!parseSize(v, out.width, out.height)) {
