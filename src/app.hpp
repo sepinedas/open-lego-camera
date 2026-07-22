@@ -1,0 +1,75 @@
+#pragma once
+
+#include <memory>
+#include <string>
+
+#include <SDL2/SDL.h>
+#include <opencv2/core.hpp>
+
+#include "camera.hpp"
+#include "config.hpp"
+#include "gallery.hpp"
+#include "recorder.hpp"
+#include "types.hpp"
+#include "ui.hpp"
+
+namespace olc {
+
+// Owns the SDL window/renderer and drives the whole application: live preview,
+// capture, gallery browsing, video playback and delete-confirm, all through the
+// translucent auto-hiding icon menu.
+class App {
+public:
+    App() = default;
+    ~App();
+
+    // One-time setup: open the display (KMSDRM on a headless Pi) and camera.
+    bool init(const Config& cfg);
+
+    // Blocks in the main loop until the user quits. Returns process exit code.
+    int run();
+
+private:
+    // --- display helpers ---
+    bool initDisplay();
+    void renderMat(const cv::Mat& mat); // letterboxed blit of a BGR frame
+    void present() { SDL_RenderPresent(ren_); }
+    void clear();
+
+    // --- input ---
+    void pumpEvents();
+    void onTap(int x, int y);
+    void dispatch(Action a);
+
+    // --- actions ---
+    void capturePhoto();
+    void toggleRecording();
+    void playCurrentVideo();
+
+    // --- per-mode rendering ---
+    void renderCamera();
+    void renderGallery();
+    void ensureGalleryImage();
+    std::string timestampName(const char* prefix, const char* ext) const;
+
+    Config cfg_;
+    std::unique_ptr<Camera> cam_;
+    std::unique_ptr<Gallery> gallery_;
+    Recorder recorder_;
+    Menu menu_;
+
+    SDL_Window* win_ = nullptr;
+    SDL_Renderer* ren_ = nullptr;
+    SDL_Texture* tex_ = nullptr;
+    int texW_ = 0, texH_ = 0;
+    int screenW_ = 0, screenH_ = 0;
+
+    Mode mode_ = Mode::Camera;
+    bool running_ = true;
+
+    cv::Mat lastFrame_;        // most recent live frame (source for photos)
+    cv::Mat galleryMat_;       // decoded image/thumbnail currently shown
+    std::string galleryShown_; // path backing galleryMat_
+};
+
+} // namespace olc

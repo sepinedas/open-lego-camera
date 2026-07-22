@@ -1,0 +1,10 @@
+build/
+*.o
+*.obj
+*.jpg
+*.jpeg
+*.png
+*.mp4
+*.avi
+*.wav
+!docs/**/*.png

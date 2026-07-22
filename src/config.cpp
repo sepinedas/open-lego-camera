@@ -1,0 +1,99 @@
+#include "config.hpp"
+
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <sys/stat.h>
+#include <sys/types.h>
+
+namespace olc {
+
+std::string defaultOutputDir() {
+    const char* home = std::getenv("HOME");
+    std::string base = home ? std::string(home) : std::string(".");
+    return base + "/Pictures/open-lego-camera";
+}
+
+static void printUsage(const char* prog) {
+    std::cout <<
+        "open-lego-camera - icon-only camera for the Raspberry Pi Zero 2 W\n\n"
+        "Usage: " << prog << " [options]\n\n"
+        "  --camera auto|picam|webcam   camera source (default: auto)\n"
+        "  --output-dir DIR             where captures are saved\n"
+        "                               (default: ~/Pictures/open-lego-camera)\n"
+        "  --webcam-index N             force /dev/videoN for a USB webcam\n"
+        "  --size WxH                   requested preview size (default: 1280x720)\n"
+        "  --driver NAME                force SDL video driver (kmsdrm, fbcon, x11)\n"
+        "  --windowed                   run in a window instead of fullscreen\n"
+        "  --no-audio                   record video without sound\n"
+        "  --help                       show this help\n";
+}
+
+// Parse "WxH" into width/height. Returns false on malformed input.
+static bool parseSize(const std::string& s, int& w, int& h) {
+    auto x = s.find('x');
+    if (x == std::string::npos) return false;
+    try {
+        w = std::stoi(s.substr(0, x));
+        h = std::stoi(s.substr(x + 1));
+    } catch (...) {
+        return false;
+    }
+    return w > 0 && h > 0;
+}
+
+bool parseArgs(int argc, char** argv, Config& out, int* exitCode) {
+    *exitCode = 0;
+    out.outputDir = defaultOutputDir();
+
+    auto need = [&](int& i) -> const char* {
+        if (i + 1 >= argc) {
+            std::cerr << "missing value for " << argv[i] << "\n";
+            *exitCode = 2;
+            return nullptr;
+        }
+        return argv[++i];
+    };
+
+    for (int i = 1; i < argc; ++i) {
+        std::string a = argv[i];
+        if (a == "--help" || a == "-h") {
+            printUsage(argv[0]);
+            return false;
+        } else if (a == "--camera") {
+            const char* v = need(i); if (!v) return false;
+            if (!std::strcmp(v, "auto")) out.camera = CameraKind::Auto;
+            else if (!std::strcmp(v, "picam")) out.camera = CameraKind::PiCam;
+            else if (!std::strcmp(v, "webcam")) out.camera = CameraKind::Webcam;
+            else { std::cerr << "unknown camera: " << v << "\n"; *exitCode = 2; return false; }
+        } else if (a == "--output-dir") {
+            const char* v = need(i); if (!v) return false;
+            out.outputDir = v;
+        } else if (a == "--webcam-index") {
+            const char* v = need(i); if (!v) return false;
+            out.webcamIndex = std::atoi(v);
+        } else if (a == "--size") {
+            const char* v = need(i); if (!v) return false;
+            if (!parseSize(v, out.width, out.height)) {
+                std::cerr << "bad --size (expected WxH): " << v << "\n"; *exitCode = 2; return false;
+            }
+        } else if (a == "--driver") {
+            const char* v = need(i); if (!v) return false;
+            out.driver = v;
+        } else if (a == "--windowed") {
+            out.windowed = true;
+        } else if (a == "--no-audio") {
+            out.audio = false;
+        } else {
+            std::cerr << "unknown option: " << a << " (try --help)\n";
+            *exitCode = 2;
+            return false;
+        }
+    }
+
+    // Best-effort create of the output directory (recursively for one level).
+    ::mkdir(out.outputDir.c_str(), 0755);
+    return true;
+}
+
+} // namespace olc
