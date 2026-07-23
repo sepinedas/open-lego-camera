@@ -316,17 +316,25 @@ void FaceFilter::applySmile(cv::Mat& frame, const cv::Rect& f) {
 
 void FaceFilter::drawTears(cv::Mat& frame, const cv::Rect& f, double phase) const {
     const float fw = f.width, fh = f.height;
-    // A tear leaves each eye from the inner-lower lid and rolls down the cheek.
     const float eyeY = f.y + 0.49f * fh;
-    const float fall = 0.40f * fh;
-    // One droplet per eye at a time (a stream of two looked like rain), and the
-    // two eyes are offset in their cycle so they don't drip in lockstep.
-    const float ox[2] = {f.x + 0.36f * fw, f.x + 0.64f * fw};
-    const float dir[2] = {-1.f, +1.f}; // bow of each cheek: left curves left
-    const float offset[2] = {0.0f, 0.43f};
-    for (int e = 0; e < 2; ++e) {
-        float p = (float)std::fmod(phase * kTearSpeed + offset[e], 1.0);
-        drawTear(frame, ox[e], eyeY, fall, fw, dir[e], p);
+    // Two tear tracks under each eye (inner + outer corner), each shedding a
+    // little stream of droplets. Everything is phase-staggered so it reads as
+    // heavy weeping -- lots of tears -- rather than a curtain of rain.
+    struct Track { float ox, dir, fall, off; };
+    const Track tracks[] = {
+        {f.x + 0.32f * fw, -1.0f, 0.42f * fh, 0.00f}, // left, outer corner
+        {f.x + 0.41f * fw, -0.35f, 0.38f * fh, 0.29f}, // left, inner corner
+        {f.x + 0.59f * fw, +0.35f, 0.38f * fh, 0.61f}, // right, inner corner
+        {f.x + 0.68f * fw, +1.0f, 0.42f * fh, 0.83f}, // right, outer corner
+    };
+    // Several droplets per track, spread across the cycle so a tear is welling,
+    // rolling and drying on each cheek at once.
+    const float dropOff[] = {0.0f, 0.34f, 0.67f};
+    for (const Track& t : tracks) {
+        for (float d : dropOff) {
+            float p = (float)std::fmod(phase * kTearSpeed + t.off + d, 1.0);
+            drawTear(frame, t.ox, eyeY, t.fall, fw, t.dir, p);
+        }
     }
 }
 
