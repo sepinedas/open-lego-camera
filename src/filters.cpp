@@ -16,7 +16,7 @@ namespace {
 // visually seamless while keeping the Pi Zero comfortable.
 constexpr int kDetectEvery = 3;
 constexpr double kDetectWidth = 320.0; // downscale target for detection
-constexpr double kTearSpeed = 0.010;   // tear cycle progress per frame (slow, viscous)
+constexpr double kTearSpeed = 0.019;   // tear cycle progress per frame (fall speed)
 
 // Candidate locations for the stock frontal-face Haar cascade, in the order we
 // try them. Debian/Raspberry Pi OS ship these in the `opencv-data` package.
