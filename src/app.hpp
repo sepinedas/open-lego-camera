@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <memory>
 #include <string>
 
@@ -45,6 +46,18 @@ private:
     // Map a normalised (0..1) touch point to screen pixels, applying the
     // configured rotate/flip so a rotated panel (e.g. HyperPixel) lines up.
     void mapTouch(float nx, float ny, int& px, int& py) const;
+    void handleFingerDown(const SDL_TouchFingerEvent& f);
+    void handleFingerMotion(const SDL_TouchFingerEvent& f);
+    void handleFingerUp(const SDL_TouchFingerEvent& f);
+    double fingerSpread() const; // pixel distance between the two active fingers
+
+    // --- overlays ---
+    // Scaled bitmap text (SDL2_gfx 8x8 font blown up); centre horizontally on x
+    // when `center`. Used for the zoom factor and the gallery timestamp.
+    void drawText(int x, int topY, const std::string& s, int scale,
+                  SDL_Color c, bool center);
+    void drawGalleryButton(const Button& b, Uint8 alpha); // last-shot thumbnail
+    void refreshThumbnail();                              // rebuild after a capture
     void dispatch(Action a);
 
     // --- actions ---
@@ -79,6 +92,25 @@ private:
     cv::Mat lastFrame_;        // most recent live frame (source for photos)
     cv::Mat galleryMat_;       // decoded image/thumbnail currently shown
     std::string galleryShown_; // path backing galleryMat_
+
+    // Capture flash animation.
+    Uint32 flashStart_ = 0;
+
+    // Last-capture thumbnail rendered on the gallery button.
+    SDL_Texture* thumbTex_ = nullptr;
+    std::string thumbPath_;
+
+    // Pinch-to-zoom and single-finger tap detection.
+    struct Finger { float x, y; };
+    std::map<SDL_FingerID, Finger> fingers_;
+    bool pinching_ = false;
+    double pinchStartDist_ = 0.0;
+    double pinchStartZoom_ = 1.0;
+    Uint32 zoomLabelUntil_ = 0;      // keep the factor visible briefly after a change
+    bool tapCandidate_ = false;      // one finger down, not yet a drag/pinch
+    SDL_FingerID tapFinger_ = 0;
+    float tapStartX_ = 0, tapStartY_ = 0;
+    Uint32 tapStartMs_ = 0;
 };
 
 } // namespace olc

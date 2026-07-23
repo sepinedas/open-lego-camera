@@ -11,12 +11,16 @@ A touch-friendly, **icon-only** camera app for the **Raspberry Pi Zero 2 W**
 - Fullscreen live preview with a **translucent, auto-hiding menu**: a few
   seconds after your last tap the menu fades away; tap anywhere to bring it
   back.
-- Menu buttons are **translucent icons, no text**: gallery, zoom out, shutter,
-  zoom in, record.
+- Menu buttons are **translucent icons, no text**: gallery, shutter, record.
+- **Pinch-to-zoom** with two fingers (digital, up to 4×); the magnification
+  factor (e.g. `2.0x`) shows briefly while zooming.
+- A **shutter-flash animation** plays when a photo is taken, and the **gallery
+  button shows a thumbnail** of the most recent photo/video.
 - **Video recording with sound** when a microphone is present (mux via
   `ffmpeg`); disable with `--no-audio`.
 - Built-in **gallery**: browse captured photos and videos, **play** videos
-  back, and **delete** them behind an icon-only ✓ / ✗ confirmation.
+  back, and **delete** them behind an icon-only ✓ / ✗ confirmation. The
+  capture **date & time** is shown translucent across the top.
 
 ![UI mockup](docs/ui-mockup.png)
 
@@ -30,7 +34,7 @@ A touch-friendly, **icon-only** camera app for the **Raspberry Pi Zero 2 W**
 | Runs with a webcam **or** Pi camera | `Camera` auto-detects: libcamera (GStreamer) first, then V4L2 webcam |
 | Written in C++ | C++17, CMake build |
 | Translucent, auto-hiding menu | `Menu` fades the icon row out ~3.5 s after the last tap; any tap wakes it |
-| Photos, video **with audio**, zoom, gallery, delete | shutter / record / zoom± / gallery icons; `arecord`+`ffmpeg` mux audio |
+| Photos, video **with audio**, zoom, gallery, delete | shutter / record / gallery icons; pinch-to-zoom; `arecord`+`ffmpeg` mux audio |
 | Icon-only buttons, no text | all icons are drawn as vector shapes (`icons.cpp`, SDL2_gfx) |
 | Headless — no X11 / window manager | SDL2 `kmsdrm`/`fbcon` renders directly to HDMI |
 
@@ -347,15 +351,18 @@ line.
 
 | Icon | Action |
 | --- | --- |
-| framed landscape | open the gallery |
-| magnifier − / + | zoom out / in (digital, up to 4×) |
-| ring with dot | take a photo |
+| last-shot thumbnail (framed-landscape icon until the first capture) | open the gallery |
+| ring with dot | take a photo (plays a shutter flash) |
 | red dot → red square | start recording → stop (turns into a stop square) |
 | chevron (gallery) | back to the camera |
 | ◀ / ▶ triangles (gallery) | previous / next item |
 | triangle-in-ring (gallery) | play the selected video |
 | trash can (gallery) | delete the shown item (asks ✓ / ✗) |
 | ✓ green / ✗ red | confirm / cancel a delete |
+
+**Zoom** is not a button: **pinch with two fingers** on the preview to zoom
+(digital, up to 4×). The current factor (`1.0x`–`4.0x`) appears briefly at the
+top while you pinch.
 
 ## Audio
 
