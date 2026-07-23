@@ -9,6 +9,7 @@
 
 #include "camera.hpp"
 #include "config.hpp"
+#include "filters.hpp"
 #include "gallery.hpp"
 #include "recorder.hpp"
 #include "types.hpp"
@@ -57,6 +58,7 @@ private:
     void drawText(int x, int topY, const std::string& s, int scale,
                   SDL_Color c, bool center);
     void drawGalleryButton(const Button& b, Uint8 alpha); // last-shot thumbnail
+    void drawFilterButton(const Button& b, Uint8 alpha);  // active-filter face glyph
     void refreshThumbnail();                              // rebuild after a capture
     void dispatch(Action a);
 
@@ -76,6 +78,8 @@ private:
     std::unique_ptr<Gallery> gallery_;
     Recorder recorder_;
     Menu menu_;
+    Filters filters_;                     // face detection + smile/cry overlays
+    Filter activeFilter_ = Filter::None;  // current live filter (baked into captures)
 
     SDL_Window* win_ = nullptr;
     SDL_Renderer* ren_ = nullptr;

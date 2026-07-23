@@ -280,6 +280,17 @@ void App::drawGalleryButton(const Button& b, Uint8 alpha) {
                          255, 255, 255, (Uint8)((int)alpha * 55 / 100));
 }
 
+// Draw the filter button: the same translucent disc as the other controls, but
+// with a face glyph whose expression reflects the currently selected filter, so
+// the icon doubles as the on/off/which indicator.
+void App::drawFilterButton(const Button& b, Uint8 alpha) {
+    Uint8 bg = (Uint8)((int)alpha * 42 / 100);
+    Uint8 ring = (Uint8)((int)alpha * 28 / 100);
+    filledCircleRGBA(ren_, b.cx, b.cy, b.r, 18, 18, 24, bg);
+    aacircleRGBA(ren_, b.cx, b.cy, b.r, 255, 255, 255, ring);
+    drawFilterIcon(ren_, activeFilter_, b.cx, b.cy, (int)(b.r * 0.62), alpha);
+}
+
 // Human-readable capture time. Prefers the IMG_/VID_YYYYMMDD_HHMMSS name;
 // falls back to the file's mtime.
 static std::string captureTime(const std::string& path) {
@@ -513,6 +524,8 @@ void App::dispatch(Action a) {
         case Action::ZoomOut:     cam_->zoomOut(); break;
         case Action::OpenGallery:
             gallery_->refresh(); refreshThumbnail(); mode_ = Mode::Gallery; break;
+        case Action::CycleFilter:
+            activeFilter_ = nextFilter(activeFilter_); break;
         case Action::Back:        mode_ = Mode::Camera; break;
         case Action::Prev:        gallery_->prev(); break;
         case Action::Next:        gallery_->next(); break;
@@ -600,7 +613,13 @@ void App::playCurrentVideo() {
 
 void App::renderCamera() {
     cv::Mat frame;
-    if (cam_->read(frame)) lastFrame_ = frame;
+    if (cam_->read(frame)) {
+        // Bake the active face filter into the frame so it shows in the preview
+        // and is captured in photos and recordings alike. Applied per fresh
+        // frame (never twice on the same one).
+        filters_.apply(frame, activeFilter_);
+        lastFrame_ = frame;
+    }
 
     if (recorder_.recording()) recorder_.writeFrame(lastFrame_);
 
@@ -619,6 +638,8 @@ void App::renderCamera() {
         for (const auto& b : btns) {
             if (b.action == Action::OpenGallery)
                 drawGalleryButton(b, a); // last-shot thumbnail
+            else if (b.action == Action::CycleFilter)
+                drawFilterButton(b, a);  // face glyph for the active filter
             else
                 Menu::drawButton(ren_, b, a, recorder_.recording());
         }

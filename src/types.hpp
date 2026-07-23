@@ -20,6 +20,7 @@ enum class Action {
     ZoomIn,
     ZoomOut,
     OpenGallery, // camera -> gallery
+    CycleFilter, // step through the face filters (none -> smile -> cry -> ...)
     Back,        // gallery -> camera
     Prev,        // previous item in gallery
     Next,        // next item in gallery
@@ -29,5 +30,23 @@ enum class Action {
     ConfirmNo,   // cancel deletion
     Quit,
 };
+
+// A live, WhatsApp-style face filter, drawn on top of the preview and baked into
+// captured photos/videos. Faces are found with a Haar cascade (see filters.cpp).
+enum class Filter {
+    None,   // no overlay
+    Smile,  // a big grin that bares big teeth when the mouth opens
+    Cry,    // a sad face with animated tears running down the cheeks
+};
+
+// The next filter in the cycle used by the on-screen filter button.
+inline Filter nextFilter(Filter f) {
+    switch (f) {
+        case Filter::None:  return Filter::Smile;
+        case Filter::Smile: return Filter::Cry;
+        case Filter::Cry:   return Filter::None;
+    }
+    return Filter::None;
+}
 
 } // namespace olc

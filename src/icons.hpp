@@ -13,4 +13,10 @@ namespace olc {
 void drawIcon(SDL_Renderer* ren, Action action, int cx, int cy, int r,
               Uint8 alpha, bool recording);
 
+// Draws the face-filter button glyph: a little face whose expression reflects
+// the active `filter` (neutral, a big grin, or a tearful frown). Centred at
+// (cx, cy) inside a circle of radius r; `alpha` modulates it with the menu fade.
+void drawFilterIcon(SDL_Renderer* ren, Filter filter, int cx, int cy, int r,
+                    Uint8 alpha);
+
 } // namespace olc

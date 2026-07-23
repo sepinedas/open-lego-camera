@@ -118,7 +118,47 @@ void iconCross(SDL_Renderer* r, int cx, int cy, int rad, Uint8 a) {
     thickLineRGBA(r, cx + s, cy - s, cx - s, cy + s, 5, 235, 80, 80, a);
 }
 
+// A little face whose expression tells you which filter is active. Angles for
+// SDL2_gfx arcs/pies are clockwise from east in screen space, so 0..180 is the
+// lower (smile) half and 180..360 is the upper (frown) half.
+void iconFilterFace(SDL_Renderer* r, int cx, int cy, int rad, Uint8 a, Filter f) {
+    Uint8 c = mod(kFg, a);
+    ring(r, cx, cy, rad, 2, c, c, c, a); // face outline
+
+    int ex = (int)(rad * 0.40);
+    int ey = cy - (int)(rad * 0.24);
+    int er = std::max(2, (int)(rad * 0.13));
+    filledCircleRGBA(r, cx - ex, ey, er, c, c, c, a);
+    filledCircleRGBA(r, cx + ex, ey, er, c, c, c, a);
+
+    int my = cy + (int)(rad * 0.24); // mouth line
+    int mw = (int)(rad * 0.46);
+    switch (f) {
+        case Filter::None: // gentle closed smile
+            arcRGBA(r, cx, my - (int)(rad * 0.15), mw, 25, 155, c, c, c, a);
+            break;
+        case Filter::Smile: // big open grin (filled lower half-disc)
+            filledPieRGBA(r, cx, my - (int)(rad * 0.10), mw, 10, 170, c, c, c, a);
+            break;
+        case Filter::Cry: { // frown + a blue tear under one eye
+            arcRGBA(r, cx, my + (int)(rad * 0.30), mw, 205, 335, c, c, c, a);
+            int tx = cx - ex, ty = ey + er + (int)(rad * 0.05);
+            int ts = std::max(2, (int)(rad * 0.16));
+            // SDL2_gfx takes RGBA: light blue = (120, 190, 240).
+            filledCircleRGBA(r, tx, ty + ts, ts, 120, 190, 240, a);
+            filledTrigonRGBA(r, tx, ty - ts, tx - ts, ty + ts / 2, tx + ts,
+                             ty + ts / 2, 120, 190, 240, a);
+            break;
+        }
+    }
+}
+
 } // namespace
+
+void drawFilterIcon(SDL_Renderer* ren, Filter filter, int cx, int cy, int r,
+                    Uint8 alpha) {
+    iconFilterFace(ren, cx, cy, r, alpha, filter);
+}
 
 void drawIcon(SDL_Renderer* ren, Action action, int cx, int cy, int r,
               Uint8 alpha, bool recording) {
@@ -128,6 +168,7 @@ void drawIcon(SDL_Renderer* ren, Action action, int cx, int cy, int r,
         case Action::ZoomIn:      iconZoom(ren, cx, cy, r, alpha, true); break;
         case Action::ZoomOut:     iconZoom(ren, cx, cy, r, alpha, false); break;
         case Action::OpenGallery: iconGallery(ren, cx, cy, r, alpha); break;
+        case Action::CycleFilter: iconFilterFace(ren, cx, cy, r, alpha, Filter::None); break;
         case Action::Back:        iconBack(ren, cx, cy, r, alpha); break;
         case Action::Prev:        iconNav(ren, cx, cy, r, alpha, true); break;
         case Action::Next:        iconNav(ren, cx, cy, r, alpha, false); break;

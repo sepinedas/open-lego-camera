@@ -52,10 +52,10 @@ Uint8 Menu::alpha() const {
 std::vector<Button> Menu::layout(Mode mode, int sw, int sh, bool hasVideo) const {
     switch (mode) {
         case Mode::Camera:
-            // Zoom is pinch-to-zoom (two fingers), so the row is just
-            // gallery / shutter / record.
-            return row({Action::OpenGallery, Action::Shutter, Action::Record},
-                       sw, sh);
+            // Zoom is pinch-to-zoom (two fingers), so the row is
+            // gallery / shutter / record / filter.
+            return row({Action::OpenGallery, Action::Shutter, Action::Record,
+                        Action::CycleFilter}, sw, sh);
         case Mode::Gallery: {
             std::vector<Action> a = {Action::Back, Action::Prev};
             if (hasVideo) a.push_back(Action::Play);

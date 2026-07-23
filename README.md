@@ -21,6 +21,10 @@ A touch-friendly, **icon-only** camera app for the **Raspberry Pi Zero 2 W**
 - Built-in **gallery**: browse captured photos and videos, **play** videos
   back, and **delete** them behind an icon-only ✓ / ✗ confirmation. The
   capture **date & time** is shown translucent across the top.
+- **WhatsApp-style face filters** (a face-glyph button cycles them): a **big
+  smile** that bares big teeth when you open your mouth, and a **crying face**
+  with animated tears. Faces are found with an OpenCV Haar cascade and the
+  overlay is **baked into photos and recordings**, not just the preview.
 
 ![UI mockup](docs/ui-mockup.png)
 
@@ -47,6 +51,20 @@ Bookworm):
 sudo apt install build-essential cmake pkg-config \
                  libsdl2-dev libsdl2-gfx-dev libopencv-dev
 ```
+
+The **face filters** need the OpenCV Haar cascade data. On Raspberry Pi OS /
+Debian Bookworm it ships in the `opencv-data` package (installed as a
+dependency of `libopencv-dev` on most images); install it explicitly if the
+cascade isn't found:
+
+```sh
+sudo apt install opencv-data
+```
+
+The app looks for the cascade in the usual locations
+(`/usr/share/opencv4/haarcascades/`, …); override with `OLC_CASCADE_DIR` if
+yours lives elsewhere. If no cascade is found the app still runs — the face
+filters are simply disabled.
 
 Optional, for **video sound**: `ffmpeg` (muxing) and `alsa-utils` (`arecord`):
 
@@ -354,6 +372,7 @@ line.
 | last-shot thumbnail (framed-landscape icon until the first capture) | open the gallery |
 | ring with dot | take a photo (plays a shutter flash) |
 | red dot → red square | start recording → stop (turns into a stop square) |
+| face glyph (neutral → grin → tears) | cycle the face filter: off → smile → cry → off |
 | chevron (gallery) | back to the camera |
 | ◀ / ▶ triangles (gallery) | previous / next item |
 | triangle-in-ring (gallery) | play the selected video |
@@ -363,6 +382,23 @@ line.
 **Zoom** is not a button: **pinch with two fingers** on the preview to zoom
 (digital, up to 4×). The current factor (`1.0x`–`4.0x`) appears briefly at the
 top while you pinch.
+
+## Face filters
+
+Tap the **face-glyph button** in the camera row to cycle the WhatsApp-style
+filters; the icon itself shows which one is active:
+
+| Icon face | Filter | Effect |
+| --- | --- | --- |
+| neutral | **off** | no overlay |
+| big grin | **smile** | a big cartoon grin over your mouth that opens into a **gaping, big-toothed smile** (upper + lower teeth, tongue) when you **open your mouth** |
+| tears | **cry** | a sad, downturned mouth and **animated tears** welling at the eyes and running down the cheeks |
+
+Faces are detected each frame with an OpenCV Haar cascade (downscaled for speed
+on the Pi Zero 2 W), and the overlay is drawn straight onto the frame, so it
+appears in the live preview **and** is saved into photos and recordings. The
+filter works on **every** face in view. Mouth-open detection is a lightweight
+brightness heuristic on the mouth region — no extra model needed.
 
 ## Audio
 
@@ -380,8 +416,13 @@ module has none — plug in a USB mic or a webcam with one):
 
 - **Modules** (`src/`): `camera` (dual backend + digital zoom), `recorder`
   (video + audio muxing), `gallery` (list/navigate/delete), `icons`
-  (procedural vector icons), `ui` (auto-hide menu, layout, hit-testing), `app`
-  (SDL display, event loop, per-mode rendering), `config` (CLI).
+  (procedural vector icons), `ui` (auto-hide menu, layout, hit-testing),
+  `filters` (Haar face detection + smile/cry overlays), `app` (SDL display,
+  event loop, per-mode rendering), `config` (CLI).
+- **Face filters** (`filters.cpp`): each frame is scaled down for a fast Haar
+  face detection; the smile/cry overlays are pure OpenCV drawing composited onto
+  the frame before it is shown, recorded or captured, so no extra model or
+  runtime dependency is needed beyond the cascade XML.
 - **Zoom** is a uniform centre-crop-and-rescale applied to both preview and
   captures, so behaviour is identical on the Pi camera and a webcam.
 - **Rendering**: each BGR frame is uploaded to a streaming SDL texture and
