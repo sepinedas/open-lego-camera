@@ -55,6 +55,7 @@ private:
 
     bool hasPose_ = false;
     cv::Vec3d prevRvec_, prevTvec_;
+    int badStreak_ = 0; // consecutive rejected solves; forces a guess-free re-init
 };
 
 } // namespace olc

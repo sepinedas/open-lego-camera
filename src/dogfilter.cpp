@@ -27,6 +27,27 @@ const cv::Vec3b kNose{35, 32, 38};      // near-black
 const cv::Vec3b kTongue{110, 110, 235}; // pink-red
 const cv::Vec3b kWhisker{232, 236, 240};// off-white
 
+// Canonical 3D face model (arbitrary but self-consistent units) for the six
+// pose landmarks. +Y up, +Z toward the front of the face.
+const std::vector<cv::Point3f>& faceModel() {
+    static const std::vector<cv::Point3f> m = {
+        {0.0f, 0.0f, 0.0f},          // 30 nose tip
+        {0.0f, -330.0f, -65.0f},     // 8  chin
+        {-225.0f, 170.0f, -135.0f},  // 36 left eye, outer corner
+        {225.0f, 170.0f, -135.0f},   // 45 right eye, outer corner
+        {-150.0f, -150.0f, -125.0f}, // 48 left mouth corner
+        {150.0f, -150.0f, -125.0f}   // 54 right mouth corner
+    };
+    return m;
+}
+std::vector<cv::Point2f> faceImagePts(const std::vector<cv::Point2f>& lm) {
+    return {lm[30], lm[8], lm[36], lm[45], lm[48], lm[54]};
+}
+cv::Matx33d intrinsics(cv::Size img) {
+    double f = std::max(img.width, img.height);
+    return cv::Matx33d(f, 0, img.width / 2.0, 0, f, img.height / 2.0, 0, 0, 1);
+}
+
 } // namespace
 
 DogFilter::DogFilter() {
@@ -84,29 +105,12 @@ double DogFilter::mouthOpen(const std::vector<cv::Point2f>& lm) {
 bool DogFilter::estimatePose(const std::vector<cv::Point2f>& lm, cv::Size img,
                              cv::Matx33d& R, cv::Vec3d& t, cv::Matx33d& K) {
     if (lm.size() < 68) return false;
-
-    // Canonical 3D face model (arbitrary but self-consistent units), matching
-    // the six landmarks below. +Y up, +Z toward the front of the face.
-    std::vector<cv::Point3f> obj = {
-        {0.0f, 0.0f, 0.0f},        // 30 nose tip
-        {0.0f, -330.0f, -65.0f},   // 8  chin
-        {-225.0f, 170.0f, -135.0f},// 36 left eye, left corner
-        {225.0f, 170.0f, -135.0f}, // 45 right eye, right corner
-        {-150.0f, -150.0f, -125.0f},// 48 left mouth corner
-        {150.0f, -150.0f, -125.0f} // 54 right mouth corner
-    };
-    std::vector<cv::Point2f> imgPts = {lm[30], lm[8],  lm[36],
-                                       lm[45], lm[48], lm[54]};
-
-    double f = std::max(img.width, img.height);
-    K = cv::Matx33d(f, 0, img.width / 2.0, 0, f, img.height / 2.0, 0, 0, 1);
+    K = intrinsics(img);
     cv::Mat dist = cv::Mat::zeros(4, 1, CV_64F);
-
     cv::Mat rvec, tvec;
-    if (!cv::solvePnP(obj, imgPts, cv::Mat(K), dist, rvec, tvec, false,
-                      cv::SOLVEPNP_ITERATIVE))
+    if (!cv::solvePnP(faceModel(), faceImagePts(lm), cv::Mat(K), dist, rvec, tvec,
+                      false, cv::SOLVEPNP_EPNP))
         return false;
-
     cv::Mat Rm;
     cv::Rodrigues(rvec, Rm);
     R = cv::Matx33d((double*)Rm.ptr<double>());
@@ -156,20 +160,66 @@ void DogFilter::smoothPose(cv::Vec3d& rvec, cv::Vec3d& tvec) {
 }
 
 bool DogFilter::apply(cv::Mat& frame, const std::vector<cv::Point2f>& landmarks) {
-    cv::Matx33d R, K;
-    cv::Vec3d t;
-    if (!estimatePose(landmarks, frame.size(), R, t, K)) return false;
+    if (landmarks.size() < 68) return false;
+    const auto& lm = landmarks;
+    cv::Matx33d K = intrinsics(frame.size());
+    cv::Mat dist = cv::Mat::zeros(4, 1, CV_64F);
+    const auto& obj = faceModel();
+    std::vector<cv::Point2f> imgPts = faceImagePts(lm);
 
-    // Smooth the pose as well as the landmarks, for a steadier filter.
-    cv::Vec3d rvec;
+    // Seeding solvePnP with the previous pose keeps each solve near the last
+    // one. Without it, the six-point problem is two-fold ambiguous and flips
+    // between frames -- which is what makes the model "fly around" and jump in
+    // size. On the first frame we use EPnP (stable without a guess).
+    // Use the previous pose as a guess while it's still trustworthy; after a run
+    // of rejected solves (e.g. the face moved during a tracking loss) fall back
+    // to a guess-free EPnP re-init so we don't stay stuck on a stale pose.
+    bool useGuess = hasPose_ && badStreak_ < 5;
+    cv::Mat rvec, tvec;
+    bool ok;
+    if (useGuess) {
+        rvec = (cv::Mat_<double>(3, 1) << prevRvec_[0], prevRvec_[1], prevRvec_[2]);
+        tvec = (cv::Mat_<double>(3, 1) << prevTvec_[0], prevTvec_[1], prevTvec_[2]);
+        ok = cv::solvePnP(obj, imgPts, cv::Mat(K), dist, rvec, tvec, true,
+                          cv::SOLVEPNP_ITERATIVE);
+    } else {
+        ok = cv::solvePnP(obj, imgPts, cv::Mat(K), dist, rvec, tvec, false,
+                          cv::SOLVEPNP_EPNP);
+    }
+
+    cv::Vec3d rv, tv;
+    bool bad = !ok;
+    if (ok) {
+        rv = cv::Vec3d(rvec.ptr<double>()[0], rvec.ptr<double>()[1], rvec.ptr<double>()[2]);
+        tv = cv::Vec3d(tvec.ptr<double>()[0], tvec.ptr<double>()[1], tvec.ptr<double>()[2]);
+        // Reject implausible solves (behind camera / non-finite / high
+        // reprojection error) instead of letting them fling the model around.
+        std::vector<cv::Point2f> proj;
+        cv::projectPoints(obj, rvec, tvec, cv::Mat(K), dist, proj);
+        double err = 0;
+        for (size_t i = 0; i < proj.size(); ++i) err += cv::norm(proj[i] - imgPts[i]);
+        err /= proj.size();
+        double eyeSpan = std::max(1.0, cv::norm(imgPts[2] - imgPts[3]));
+        if (!std::isfinite(tv[0]) || !std::isfinite(tv[2]) || tv[2] <= 1e-3 ||
+            err > 0.35 * eyeSpan)
+            bad = true;
+    }
+
+    if (bad) {
+        ++badStreak_;
+        if (!hasPose_) return false; // nothing good to fall back to
+        rv = prevRvec_;              // hold the last good pose (don't fly)
+        tv = prevTvec_;
+    } else {
+        badStreak_ = 0;
+    }
+
+    smoothPose(rv, tv); // temporal smoothing on top
+
     cv::Mat rm;
-    cv::Rodrigues(cv::Mat(R), rm);
-    rvec = cv::Vec3d(rm.ptr<double>()[0], rm.ptr<double>()[1], rm.ptr<double>()[2]);
-    smoothPose(rvec, t);
-    cv::Rodrigues(rvec, rm);
-    R = cv::Matx33d((double*)rm.ptr<double>());
-
-    render(frame, R, t, K, mouthOpen(landmarks));
+    cv::Rodrigues(cv::Mat(rv), rm);
+    cv::Matx33d R((double*)rm.ptr<double>());
+    render(frame, R, tv, K, mouthOpen(lm));
     return true;
 }
 
