@@ -1,8 +1,14 @@
 #include "app.hpp"
 
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <dirent.h>
 #include <iostream>
+#include <sys/stat.h>
 #include <vector>
 
 #include <SDL2/SDL2_gfxPrimitives.h>
@@ -17,6 +23,7 @@ App::~App() {
     if (recorder_.recording()) recorder_.stop();
     if (tex_) SDL_DestroyTexture(tex_);
     if (canvas_) SDL_DestroyTexture(canvas_);
+    if (thumbTex_) SDL_DestroyTexture(thumbTex_);
     if (ren_) SDL_DestroyRenderer(ren_);
     if (win_) SDL_DestroyWindow(win_);
     SDL_Quit();
@@ -171,6 +178,136 @@ void App::physicalToView(int px, int py, int& vx, int& vy) const {
     vy = std::min(viewH_ - 1, std::max(0, vy));
 }
 
+// Scaled bitmap text via SDL2_gfx's 8x8 font: render once into a small target
+// texture, then blit it magnified. Keeps text crisp and avoids an SDL_ttf/font
+// dependency. Falls back to unscaled text if target textures aren't supported.
+void App::drawText(int x, int topY, const std::string& s, int scale,
+                   SDL_Color c, bool center) {
+    if (s.empty()) return;
+    int w = 8 * (int)s.size(), h = 8;
+    SDL_Texture* prev = SDL_GetRenderTarget(ren_);
+    SDL_Texture* t = SDL_CreateTexture(ren_, SDL_PIXELFORMAT_ARGB8888,
+                                       SDL_TEXTUREACCESS_TARGET, w, h);
+    if (!t) {
+        stringRGBA(ren_, (Sint16)(center ? x - w / 2 : x), (Sint16)topY,
+                   s.c_str(), c.r, c.g, c.b, c.a);
+        return;
+    }
+    SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderTarget(ren_, t);
+    SDL_SetRenderDrawColor(ren_, 0, 0, 0, 0);
+    SDL_RenderClear(ren_);
+    stringRGBA(ren_, 0, 0, s.c_str(), c.r, c.g, c.b, c.a);
+    SDL_SetRenderTarget(ren_, prev);
+    SDL_Rect dst{center ? x - (w * scale) / 2 : x, topY, w * scale, h * scale};
+    SDL_RenderCopy(ren_, t, nullptr, &dst);
+    SDL_DestroyTexture(t);
+}
+
+// Newest photo/video in the output dir (timestamp names sort chronologically).
+static std::string newestMedia(const std::string& dir) {
+    std::string best;
+    if (DIR* d = ::opendir(dir.c_str())) {
+        while (dirent* e = ::readdir(d)) {
+            std::string n = e->d_name;
+            if (n.find(".video.mp4") != std::string::npos) continue; // mux temp
+            if (n.find(".audio.wav") != std::string::npos) continue;
+            auto ends = [&](const char* x) {
+                std::string s(x);
+                return n.size() > s.size() &&
+                       n.compare(n.size() - s.size(), s.size(), s) == 0;
+            };
+            if (ends(".jpg") || ends(".jpeg") || ends(".png") || ends(".mp4") ||
+                ends(".avi") || ends(".mov")) {
+                if (n > best) best = n; // lexicographic == chronological here
+            }
+        }
+        ::closedir(d);
+    }
+    return best.empty() ? "" : dir + "/" + best;
+}
+
+// Rebuild the little square thumbnail shown on the gallery button.
+void App::refreshThumbnail() {
+    std::string path = newestMedia(cfg_.outputDir);
+    if (path.empty()) {
+        if (thumbTex_) { SDL_DestroyTexture(thumbTex_); thumbTex_ = nullptr; }
+        thumbPath_.clear();
+        return;
+    }
+    if (path == thumbPath_ && thumbTex_) return;
+
+    cv::Mat img;
+    if (Gallery::isVideo(path)) {
+        cv::VideoCapture vc(path);
+        if (vc.isOpened()) vc.read(img);
+    } else {
+        img = cv::imread(path, cv::IMREAD_COLOR);
+    }
+    if (img.empty()) return;
+
+    // Centre-crop to a square, then downscale.
+    int side = std::min(img.cols, img.rows);
+    cv::Rect roi((img.cols - side) / 2, (img.rows - side) / 2, side, side);
+    cv::Mat sq;
+    cv::resize(img(roi), sq, cv::Size(128, 128), 0, 0, cv::INTER_AREA);
+
+    if (thumbTex_) { SDL_DestroyTexture(thumbTex_); thumbTex_ = nullptr; }
+    thumbTex_ = SDL_CreateTexture(ren_, SDL_PIXELFORMAT_BGR24,
+                                  SDL_TEXTUREACCESS_STATIC, sq.cols, sq.rows);
+    if (thumbTex_) {
+        SDL_UpdateTexture(thumbTex_, nullptr, sq.data, (int)sq.step);
+        SDL_SetTextureBlendMode(thumbTex_, SDL_BLENDMODE_BLEND);
+    }
+    thumbPath_ = path;
+}
+
+// Draw the gallery button as the last capture's thumbnail (rounded square),
+// falling back to the framed-landscape icon when nothing has been captured.
+void App::drawGalleryButton(const Button& b, Uint8 alpha) {
+    if (!thumbTex_) {
+        Menu::drawButton(ren_, b, alpha, false);
+        return;
+    }
+    int s = b.r;
+    Uint8 bg = (Uint8)((int)alpha * 42 / 100);
+    roundedBoxRGBA(ren_, b.cx - s, b.cy - s, b.cx + s, b.cy + s, 7, 18, 18, 24,
+                   std::max<Uint8>(1, bg));
+    SDL_SetTextureAlphaMod(thumbTex_, alpha);
+    SDL_Rect dst{b.cx - s + 3, b.cy - s + 3, 2 * s - 6, 2 * s - 6};
+    SDL_RenderCopy(ren_, thumbTex_, nullptr, &dst);
+    roundedRectangleRGBA(ren_, b.cx - s, b.cy - s, b.cx + s, b.cy + s, 7,
+                         255, 255, 255, (Uint8)((int)alpha * 55 / 100));
+}
+
+// Human-readable capture time. Prefers the IMG_/VID_YYYYMMDD_HHMMSS name;
+// falls back to the file's mtime.
+static std::string captureTime(const std::string& path) {
+    std::string base = path.substr(path.find_last_of('/') + 1);
+    // Find an 8-4? pattern: _YYYYMMDD_HHMMSS
+    for (size_t i = 0; i + 15 < base.size() + 1; ++i) {
+        if (base[i] != '_') continue;
+        std::string d = base.substr(i + 1, 8), t;
+        if (i + 10 <= base.size() && base[i + 9] == '_')
+            t = base.substr(i + 10, 6);
+        bool digits = d.size() == 8 && t.size() == 6;
+        for (char ch : d + t) if (!std::isdigit((unsigned char)ch)) digits = false;
+        if (digits)
+            return d.substr(0, 4) + "-" + d.substr(4, 2) + "-" + d.substr(6, 2) +
+                   "  " + t.substr(0, 2) + ":" + t.substr(2, 2) + ":" +
+                   t.substr(4, 2);
+    }
+    struct stat st{};
+    if (::stat(path.c_str(), &st) == 0) {
+        std::tm tm{};
+        localtime_r(&st.st_mtime, &tm);
+        char buf[32];
+        std::strftime(buf, sizeof(buf), "%Y-%m-%d  %H:%M:%S", &tm);
+        return buf;
+    }
+    return "";
+}
+
 // Blit a BGR cv::Mat to the screen, preserving aspect ratio (letterboxed).
 void App::renderMat(const cv::Mat& src) {
     clear();
@@ -217,6 +354,7 @@ bool App::init(const Config& cfg) {
               << "x" << cam_->height() << " @ " << cam_->fps() << "fps\n";
 
     gallery_ = std::make_unique<Gallery>(cfg_.outputDir);
+    refreshThumbnail();
     menu_.wake();
     return true;
 }
@@ -260,15 +398,15 @@ void App::pumpEvents() {
                 }
                 break;
             }
-            case SDL_FINGERDOWN: {
-                // Touch coords are normalised 0..1 on KMSDRM: correct for any
-                // touch-panel misalignment, then undo the display rotation.
-                int px, py, vx, vy;
-                mapTouch(e.tfinger.x, e.tfinger.y, px, py);
-                physicalToView(px, py, vx, vy);
-                onTap(vx, vy);
+            case SDL_FINGERDOWN:
+                handleFingerDown(e.tfinger);
                 break;
-            }
+            case SDL_FINGERMOTION:
+                handleFingerMotion(e.tfinger);
+                break;
+            case SDL_FINGERUP:
+                handleFingerUp(e.tfinger);
+                break;
             default:
                 break;
         }
@@ -287,6 +425,66 @@ void App::mapTouch(float nx, float ny, int& px, int& py) const {
     if (cfg_.touchFlipY) y = 1.f - y;
     px = std::min(screenW_ - 1, std::max(0, (int)(x * screenW_)));
     py = std::min(screenH_ - 1, std::max(0, (int)(y * screenH_)));
+}
+
+double App::fingerSpread() const {
+    if (fingers_.size() < 2) return 0.0;
+    auto it = fingers_.begin();
+    float x1 = it->second.x, y1 = it->second.y;
+    ++it;
+    float x2 = it->second.x, y2 = it->second.y;
+    double dx = (double)(x2 - x1) * screenW_, dy = (double)(y2 - y1) * screenH_;
+    return std::sqrt(dx * dx + dy * dy);
+}
+
+void App::handleFingerDown(const SDL_TouchFingerEvent& f) {
+    menu_.wake();
+    fingers_[f.fingerId] = {f.x, f.y};
+    if (fingers_.size() == 1) {
+        // Possible tap; confirmed on finger-up if it stays put and no 2nd finger.
+        tapCandidate_ = true;
+        tapFinger_ = f.fingerId;
+        tapStartX_ = f.x;
+        tapStartY_ = f.y;
+        tapStartMs_ = SDL_GetTicks();
+    } else if (fingers_.size() == 2) {
+        // A second finger starts a pinch and cancels the pending tap.
+        tapCandidate_ = false;
+        pinching_ = true;
+        pinchStartDist_ = fingerSpread();
+        pinchStartZoom_ = cam_->zoom();
+        zoomLabelUntil_ = SDL_GetTicks() + 1200;
+    }
+}
+
+void App::handleFingerMotion(const SDL_TouchFingerEvent& f) {
+    auto it = fingers_.find(f.fingerId);
+    if (it != fingers_.end()) it->second = {f.x, f.y};
+
+    if (pinching_ && fingers_.size() >= 2 && pinchStartDist_ > 1.0) {
+        double z = pinchStartZoom_ * (fingerSpread() / pinchStartDist_);
+        cam_->setZoom(z);
+        zoomLabelUntil_ = SDL_GetTicks() + 1200;
+    }
+    if (tapCandidate_ && f.fingerId == tapFinger_) {
+        float dx = f.x - tapStartX_, dy = f.y - tapStartY_;
+        if (dx * dx + dy * dy > 0.0009f) tapCandidate_ = false; // ~3% drag
+    }
+}
+
+void App::handleFingerUp(const SDL_TouchFingerEvent& f) {
+    fingers_.erase(f.fingerId);
+    if (fingers_.size() < 2) pinching_ = false;
+
+    if (tapCandidate_ && f.fingerId == tapFinger_ && fingers_.empty()) {
+        if (SDL_GetTicks() - tapStartMs_ < 700) {
+            int px, py, vx, vy;
+            mapTouch(f.x, f.y, px, py);
+            physicalToView(px, py, vx, vy);
+            onTap(vx, vy);
+        }
+    }
+    tapCandidate_ = false;
 }
 
 void App::onTap(int x, int y) {
@@ -313,7 +511,8 @@ void App::dispatch(Action a) {
         case Action::Record:      toggleRecording(); break;
         case Action::ZoomIn:      cam_->zoomIn(); break;
         case Action::ZoomOut:     cam_->zoomOut(); break;
-        case Action::OpenGallery: gallery_->refresh(); mode_ = Mode::Gallery; break;
+        case Action::OpenGallery:
+            gallery_->refresh(); refreshThumbnail(); mode_ = Mode::Gallery; break;
         case Action::Back:        mode_ = Mode::Camera; break;
         case Action::Prev:        gallery_->prev(); break;
         case Action::Next:        gallery_->next(); break;
@@ -323,6 +522,7 @@ void App::dispatch(Action a) {
             break;
         case Action::ConfirmYes:
             gallery_->deleteCurrent();
+            refreshThumbnail();
             mode_ = gallery_->empty() ? Mode::Camera : Mode::Gallery;
             break;
         case Action::ConfirmNo:
@@ -345,12 +545,15 @@ void App::capturePhoto() {
     std::string path = timestampName("IMG", ".jpg");
     cv::imwrite(path, lastFrame_);
     std::cout << "saved " << path << "\n";
+    flashStart_ = SDL_GetTicks(); // shutter flash animation
+    refreshThumbnail();           // update the gallery-button preview
 }
 
 void App::toggleRecording() {
     if (recorder_.recording()) {
         recorder_.stop();
         std::cout << "recording stopped\n";
+        refreshThumbnail();
     } else if (!lastFrame_.empty()) {
         std::string path = timestampName("VID", ".mp4");
         cv::Size sz(lastFrame_.cols, lastFrame_.rows);
@@ -413,8 +616,39 @@ void App::renderCamera() {
     if (menu_.awake()) {
         Uint8 a = menu_.alpha();
         auto btns = menu_.layout(Mode::Camera, viewW_, viewH_, false);
-        for (const auto& b : btns)
-            Menu::drawButton(ren_, b, a, recorder_.recording());
+        for (const auto& b : btns) {
+            if (b.action == Action::OpenGallery)
+                drawGalleryButton(b, a); // last-shot thumbnail
+            else
+                Menu::drawButton(ren_, b, a, recorder_.recording());
+        }
+    }
+
+    // Magnification factor while/just after pinching (or whenever zoomed in).
+    Uint32 now = SDL_GetTicks();
+    double z = cam_->zoom();
+    if (z > 1.001 || now < zoomLabelUntil_) {
+        char buf[16];
+        std::snprintf(buf, sizeof(buf), "%.1fx", z);
+        int scale = std::max(2, viewH_ / 160);
+        int tw = 8 * (int)std::string(buf).size() * scale;
+        int pad = 8 * scale / 2;
+        roundedBoxRGBA(ren_, viewW_ / 2 - tw / 2 - pad, 12,
+                       viewW_ / 2 + tw / 2 + pad, 12 + 8 * scale + pad,
+                       6, 0, 0, 0, 110);
+        drawText(viewW_ / 2, 12 + pad / 2, buf, scale, {255, 255, 255, 235}, true);
+    }
+
+    // Shutter flash: a quick white wash that fades out after a capture.
+    if (flashStart_) {
+        Uint32 dt = now - flashStart_;
+        const Uint32 dur = 320;
+        if (dt < dur) {
+            Uint8 a = (Uint8)(210.0 * (1.0 - (double)dt / dur));
+            boxRGBA(ren_, 0, 0, viewW_, viewH_, 255, 255, 255, a);
+        } else {
+            flashStart_ = 0;
+        }
     }
     present();
 }
@@ -449,6 +683,20 @@ void App::renderGallery() {
             filledCircleRGBA(ren_, viewW_ / 2, viewH_ / 2, r, 0, 0, 0, 90);
             drawIcon(ren_, Action::Play, viewW_ / 2, viewH_ / 2,
                      (int)(r * 0.62), 220, false);
+        }
+    }
+
+    // Capture date/time, translucent, across the top.
+    if (!gallery_->empty()) {
+        std::string ts = captureTime(gallery_->current());
+        if (!ts.empty()) {
+            // Scale for readability but shrink so it fits the width in portrait.
+            int fitW = (int)(viewW_ * 0.92 / (8 * ts.size()));
+            int scale = std::max(2, std::min({viewH_ / 150, fitW, 4}));
+            int barH = 8 * scale + 20;
+            boxRGBA(ren_, 0, 0, viewW_, barH, 0, 0, 0, 105);
+            drawText(viewW_ / 2, (barH - 8 * scale) / 2, ts, scale,
+                     {255, 255, 255, 220}, true);
         }
     }
 

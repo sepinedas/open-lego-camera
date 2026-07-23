@@ -25,7 +25,9 @@ public:
 
     void zoomIn();
     void zoomOut();
+    void setZoom(double z);       // absolute zoom, clamped to [1, maxZoom()]
     double zoom() const { return zoom_; }
+    static double maxZoom();
 
     int width() const { return width_; }
     int height() const { return height_; }

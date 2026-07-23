@@ -108,6 +108,8 @@ std::unique_ptr<Camera> Camera::open(const Config& cfg) {
 
 void Camera::zoomIn() { zoom_ = std::min(kMaxZoom, zoom_ * kZoomStep); }
 void Camera::zoomOut() { zoom_ = std::max(1.0, zoom_ / kZoomStep); }
+void Camera::setZoom(double z) { zoom_ = std::min(kMaxZoom, std::max(1.0, z)); }
+double Camera::maxZoom() { return kMaxZoom; }
 
 // Digital zoom: crop a centred window of size (1/zoom) and scale it back up to
 // the full frame. Uniform across both backends so behaviour is identical.
