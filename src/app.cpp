@@ -226,7 +226,7 @@ bool App::init(const Config& cfg) {
 void App::ensureFilter() {
     if (filterInit_) return;
     filterInit_ = true;
-    faceTracker_.init(cfg_.cascade, cfg_.faceModel);
+    faceTracker_.init(cfg_.cascade, cfg_.faceModel, cfg_.yunetModel);
     dogFilter_ = std::make_unique<DogFilter>();
 }
 

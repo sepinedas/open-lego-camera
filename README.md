@@ -375,32 +375,47 @@ like the phone apps.
 > Rendered by `tools/filter_mockup.cpp` at four head poses using the real
 > filter code (the face is a placeholder sketch).
 
-**How it works**
+**How it works** (all OpenCV, no extra runtime)
 
-1. **Landmarks** — a Haar detector finds the face, then OpenCV's `FacemarkLBF`
-   fits 68 facial landmarks (the "face mesh").
-2. **Head pose** — `solvePnP` against a canonical 3D face model recovers the
+1. **Detection** — **YuNet** (a DNN face detector) when its model loads,
+   otherwise the built-in **Haar** cascade. Detection runs periodically rather
+   than every frame.
+2. **Landmarks** — OpenCV's `FacemarkLBF` fits 68 facial landmarks (the "face
+   mesh"). Between detector runs the fit is seeded from the *previous frame's*
+   landmark box, which tracks head turns far more smoothly than re-detecting
+   each frame.
+3. **Smoothing** — a **one-euro filter** on the landmarks removes the frame-to-
+   frame jitter that otherwise makes the assets shake, while keeping latency low
+   when you actually move.
+4. **Head pose** — `solvePnP` against a canonical 3D face model recovers the
    head's rotation and translation.
-3. **3D assets** — the ears/muzzle/nose/tongue are procedurally-generated smooth
+5. **3D assets** — the ears/muzzle/nose/tongue are procedurally-generated smooth
    ellipsoids with per-vertex normals, positioned in a face-local frame and
    transformed by the head pose.
-4. **Render** — a small software rasterizer (perspective projection, z-buffer,
+6. **Render** — a small software rasterizer (perspective projection, z-buffer,
    Lambert shading) composites the lit meshes onto each frame. No OpenGL context
    is needed, so it slots into the existing SDL/OpenCV pipeline and works
    headless.
 
-**Setup** — the Haar cascade ships with `libopencv-dev`; you only need to fetch
-the landmark model (~54 MB) once:
+**Setup** — the Haar cascade ships with `libopencv-dev`; fetch the landmark
+model once:
 
 ```sh
-scripts/get-models.sh          # downloads models/lbfmodel.yaml
+scripts/get-models.sh              # downloads models/lbfmodel.yaml (~54 MB)
+scripts/get-models.sh --yunet      # optional: also the YuNet detector (~230 KB)
 build/open-lego-camera --filter    # or tap the dog icon in the menu
 ```
 
-The model is searched for at `--face-model`, then `./models/lbfmodel.yaml`,
-`~/.local/share/open-lego-camera/lbfmodel.yaml`, and
-`/usr/share/open-lego-camera/`. If it isn't found the app still runs — the
-filter just draws nothing and prints where to get the model.
+Models are searched for at `--face-model` / `--yunet-model`, then `./models/`,
+`~/.local/share/open-lego-camera/`, and `/usr/share/open-lego-camera/`. If the
+landmark model isn't found the app still runs — the filter just draws nothing
+and prints where to get it.
+
+> **YuNet & OpenCV version:** YuNet gives noticeably better detection than Haar,
+> but the current (2023mar) model needs **OpenCV ≥ 4.8**. On older OpenCV (e.g.
+> Raspberry Pi OS Bookworm ships 4.6) it can't load, and the app falls back to
+> Haar automatically — the landmark smoothing and landmark-box tracking still
+> apply, so tracking is stable either way.
 
 > **Performance:** landmark fitting is the expensive part. It's comfortable on a
 > Pi 5, but heavy on a Pi Zero 2 W — the app re-tracks every other frame and

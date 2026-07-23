@@ -38,6 +38,8 @@ static void printUsage(const char* prog) {
         "  --filter                     start with the dog face filter on\n"
         "  --face-model PATH            LBF landmark model (default: ./models or\n"
         "                               fetch with scripts/get-models.sh)\n"
+        "  --yunet-model PATH           YuNet ONNX face detector (preferred;\n"
+        "                               falls back to Haar if absent)\n"
         "  --cascade PATH               Haar face cascade (default: OpenCV data)\n"
         "  --help                       show this help\n";
 }
@@ -125,6 +127,9 @@ bool parseArgs(int argc, char** argv, Config& out, int* exitCode) {
         } else if (a == "--face-model") {
             const char* v = need(i); if (!v) return false;
             out.faceModel = v;
+        } else if (a == "--yunet-model") {
+            const char* v = need(i); if (!v) return false;
+            out.yunetModel = v;
         } else if (a == "--cascade") {
             const char* v = need(i); if (!v) return false;
             out.cascade = v;

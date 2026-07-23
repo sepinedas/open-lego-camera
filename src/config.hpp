@@ -23,7 +23,8 @@ struct Config {
     int height = 720;        // requested preview height
     bool filter = false;     // start with the dog face filter enabled
     std::string faceModel;   // path to the LBF landmark model (lbfmodel.yaml)
-    std::string cascade;     // path to the Haar face cascade
+    std::string cascade;     // path to the Haar face cascade (fallback detector)
+    std::string yunetModel;  // path to the YuNet ONNX detector (preferred)
 };
 
 // Parse argv. Returns false and prints usage on --help or a bad flag; sets
