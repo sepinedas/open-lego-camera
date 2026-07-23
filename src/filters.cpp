@@ -16,7 +16,7 @@ namespace {
 // visually seamless while keeping the Pi Zero comfortable.
 constexpr int kDetectEvery = 3;
 constexpr double kDetectWidth = 320.0; // downscale target for detection
-constexpr double kTearSpeed = 0.016;   // tear fall progress per frame
+constexpr double kTearSpeed = 0.010;   // tear cycle progress per frame (slow, viscous)
 
 // Candidate locations for the stock frontal-face Haar cascade, in the order we
 // try them. Debian/Raspberry Pi OS ship these in the `opencv-data` package.
@@ -53,6 +53,68 @@ void blendLine(cv::Mat& img, cv::Point a, cv::Point b, cv::Scalar col, int th,
     cv::Mat roi = img(rc), ov = roi.clone();
     cv::line(ov, a - rc.tl(), b - rc.tl(), col, th, cv::LINE_AA);
     cv::addWeighted(ov, alpha, roi, 1.0 - alpha, 0.0, roi);
+}
+
+// Draw a single tear at cycle progress p (0..1) rolling from (ox, oy) down the
+// cheek. The motion is modelled on a real tear rather than a raindrop: it first
+// *wells* at the eye as a growing bead, then a single droplet releases and rolls
+// down, starting slow (held by surface tension) and accelerating, drifting
+// slightly outward along the cheek and fading as it dries near the jaw. It
+// leaves a thin glistening wet track and carries a bright highlight.
+void drawTear(cv::Mat& img, float ox, float oy, float fall, float fw, float dir,
+              float p) {
+    const cv::Scalar track(235, 210, 165); // BGR: faint bluish wet streak
+    const cv::Scalar body(250, 235, 205);  // translucent watery droplet
+    const cv::Scalar shine(255, 255, 255);
+    const float beadR = std::max(2.f, 0.024f * fw);
+    const float wellEnd = 0.22f; // fraction of the cycle spent welling up
+
+    if (p < wellEnd) {
+        // Welling: a small bead pools on the lid and swells before it drops.
+        float g = p / wellEnd;
+        int r = std::max(1, (int)(beadR * (0.35f + 0.55f * g)));
+        int by = (int)(oy + r * 0.4f);
+        blendCircle(img, {(int)ox, by}, r, body, 0.30 + 0.30 * g);
+        blendCircle(img, {(int)(ox - r * 0.35f), (int)(by - r * 0.35f)},
+                    std::max(1, r / 3), shine, 0.5 + 0.25 * g);
+        return;
+    }
+
+    float u = (p - wellEnd) / (1.f - wellEnd); // 0..1 along the roll
+    // Ease-in: slow release, then accelerating as the drop runs (u^2-ish).
+    float ease = u * u * (1.15f - 0.15f * u);
+    float y = oy + fall * ease;
+    // Gentle outward bow following the curve of the cheek.
+    float x = ox + dir * 0.045f * fw * std::sin(u * 1.5708f);
+
+    // Fade in at release and out as it dries near the jaw.
+    float alpha = 1.f;
+    if (u < 0.12f) alpha = u / 0.12f;
+    else if (u > 0.82f) alpha = std::max(0.f, (1.f - u) / 0.18f);
+
+    // Wet track: a thin streak tracing the droplet's actual path from the eye
+    // down to where it is now, faintest at the top (drying) and following the
+    // same slight bow.
+    const int seg = 8;
+    const int th = std::max(1, (int)(beadR * 0.35f));
+    float px = ox, py = oy;
+    for (int s = 1; s <= seg; ++s) {
+        float w = u * (float)s / seg;                 // sample the travelled path
+        float we = w * w * (1.15f - 0.15f * w);
+        float tx = ox + dir * 0.045f * fw * std::sin(w * 1.5708f);
+        float ty = oy + fall * we;
+        blendLine(img, {(int)px, (int)py}, {(int)tx, (int)ty}, track, th,
+                  0.22 * alpha * (float)s / seg);      // fade toward the eye
+        px = tx; py = ty;
+    }
+
+    // The droplet: a slightly teardrop-shaped bead with a bright highlight.
+    int r = std::max(2, (int)beadR);
+    blendCircle(img, {(int)x, (int)y}, r, body, 0.60 * alpha);
+    blendCircle(img, {(int)x, (int)(y - r * 0.7f)}, std::max(1, (int)(r * 0.6f)),
+                body, 0.55 * alpha); // pointed top -> teardrop silhouette
+    blendCircle(img, {(int)(x - r * 0.33f), (int)(y - r * 0.33f)},
+                std::max(1, r / 3), shine, 0.85 * alpha);
 }
 
 // Locally reshape `img` so that the image feature at each src[i] appears to move
@@ -254,26 +316,17 @@ void FaceFilter::applySmile(cv::Mat& frame, const cv::Rect& f) {
 
 void FaceFilter::drawTears(cv::Mat& frame, const cv::Rect& f, double phase) const {
     const float fw = f.width, fh = f.height;
-    const float eyeY = f.y + 0.47f * fh;
-    const float fall = 0.45f * fh;
-    const int trailW = std::max(2, (int)(0.020f * fw));
-    const int drop = std::max(2, (int)(0.035f * fw));
-    const cv::Scalar trail(255, 220, 170); // BGR: watery light blue
-    const cv::Scalar bead(255, 235, 205);
-
-    const float eyeX[2] = {f.x + 0.32f * fw, f.x + 0.68f * fw};
-    for (float ex : eyeX) {
-        // Two beads per eye, half a cycle apart, so a tear is always visible.
-        for (int k = 0; k < 2; ++k) {
-            float prog = (float)std::fmod(phase * kTearSpeed + 0.5 * k, 1.0);
-            int y0 = (int)eyeY;
-            int yh = (int)(eyeY + fall * prog);
-            blendLine(frame, {(int)ex, y0}, {(int)ex, yh}, trail, trailW,
-                      0.45 * (1.0 - 0.4 * prog));
-            blendCircle(frame, {(int)ex, yh}, drop, bead, 0.6);
-            blendCircle(frame, {(int)ex - drop / 3, yh - drop / 3},
-                        std::max(1, drop / 3), cv::Scalar(255, 255, 255), 0.7);
-        }
+    // A tear leaves each eye from the inner-lower lid and rolls down the cheek.
+    const float eyeY = f.y + 0.49f * fh;
+    const float fall = 0.40f * fh;
+    // One droplet per eye at a time (a stream of two looked like rain), and the
+    // two eyes are offset in their cycle so they don't drip in lockstep.
+    const float ox[2] = {f.x + 0.36f * fw, f.x + 0.64f * fw};
+    const float dir[2] = {-1.f, +1.f}; // bow of each cheek: left curves left
+    const float offset[2] = {0.0f, 0.43f};
+    for (int e = 0; e < 2; ++e) {
+        float p = (float)std::fmod(phase * kTearSpeed + offset[e], 1.0);
+        drawTear(frame, ox[e], eyeY, fall, fw, dir[e], p);
     }
 }
 
