@@ -4,7 +4,10 @@ A touch-friendly, **icon-only** camera app for the **Raspberry Pi Zero 2 W**
 (or any Linux box with a webcam), written in **C++17**.
 
 - Works with the **Raspberry Pi camera module** (via libcamera / GStreamer) or
-  any **USB webcam** (via V4L2) — auto-detected at startup.
+  any **USB webcam** (via V4L2) — auto-detected at startup, and switchable
+  **live** with the **switch-camera** button (the two-arrows-around-a-camera
+  icon) so you can flip between the Pi camera and a USB camera without
+  restarting.
 - Runs on a **headless Raspberry Pi** with **no desktop, X11 or Wayland** — it
   draws straight to the **HDMI** output through DRM/KMS (SDL2's `kmsdrm`
   driver, selected automatically).
@@ -16,7 +19,8 @@ A touch-friendly, **icon-only** camera app for the **Raspberry Pi Zero 2 W**
 - Fullscreen live preview with a **translucent, auto-hiding menu**: a few
   seconds after your last tap the menu fades away; tap anywhere to bring it
   back.
-- Menu buttons are **translucent icons, no text**: gallery, shutter, record.
+- Menu buttons are **translucent icons, no text**: home, switch-camera, filter,
+  gallery, shutter, record.
 - **Pinch-to-zoom** with two fingers (digital, up to 4×); the magnification
   factor (e.g. `2.0x`) shows briefly while zooming.
 - A **shutter-flash animation** plays when a photo is taken, and the **gallery
@@ -46,7 +50,7 @@ A touch-friendly, **icon-only** camera app for the **Raspberry Pi Zero 2 W**
 | Requirement | How |
 | --- | --- |
 | Welcome screen with a Lego-brick camera; Start / Sleep options | `Mode::Welcome` draws `drawLegoCamera` (bricks + lens in `icons.cpp`); Sleep blanks the panel via `vcgencmd display_power` and wakes on a double-tap |
-| Runs with a webcam **or** Pi camera | `Camera` auto-detects: libcamera (GStreamer) first, then V4L2 webcam |
+| Runs with a webcam **or** Pi camera | `Camera` auto-detects: libcamera (GStreamer) first, then V4L2 webcam; the switch-camera button toggles between the two at runtime (`App::switchCamera`) |
 | Written in C++ | C++17, CMake build |
 | Translucent, auto-hiding menu | `Menu` fades the icon row out ~3.5 s after the last tap; any tap wakes it |
 | Photos, video **with audio**, zoom, gallery, delete | shutter / record / gallery icons; pinch-to-zoom; `arecord`+`ffmpeg` mux audio |
@@ -132,12 +136,22 @@ convert.
 
 If you have **more than one camera** (e.g. the IMX500 *and* a USB webcam),
 `--camera auto` tries the first libcamera camera before falling back to a
-webcam. Force a source explicitly with `--camera picam` / `--camera webcam`,
-and pick a specific libcamera camera with `--picam-name` — list the ids with:
+webcam. Force the *starting* source explicitly with `--camera picam` /
+`--camera webcam`, and pick a specific libcamera camera with `--picam-name` —
+list the ids with:
 
 ```sh
 rpicam-hello --list-cameras
 ```
+
+With both a Pi camera and a USB camera connected you don't have to choose up
+front: tap the **switch-camera** button in the live view to flip between them at
+any time. The app opens the *other* source before releasing the current one, so
+if the target isn't present (e.g. no USB camera plugged in) the running camera
+keeps going and a brief **`NO USB CAMERA`** / **`NO PI CAMERA`** banner explains
+why nothing changed. A successful switch shows the new source's name
+(**`PI CAMERA`** / **`USB CAMERA`**), resets the digital zoom, and stops any
+in-progress recording (its video belongs to the old source's resolution).
 
 Sanity-check the raw pipeline outside the app with:
 
@@ -181,7 +195,7 @@ build/open-lego-camera [options]
 
 ### Facial filters
 
-Tap the **smiley** button (bottom-left in the camera view) to cycle the live
+Tap the **smiley** button in the camera menu to cycle the live
 facial filter: **Big Smile** → **Crying** → off. The active filter's name
 appears briefly on screen, and the effect is baked into any photo or video you
 then capture.

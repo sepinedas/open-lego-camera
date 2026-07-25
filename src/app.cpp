@@ -597,6 +597,9 @@ void App::dispatch(Action a) {
             filter_ = nextFilter(filter_);
             filterLabelUntil_ = SDL_GetTicks() + 1500;
             break;
+        case Action::SwitchCamera:
+            switchCamera();
+            break;
         case Action::StartCamera:
             mode_ = Mode::Camera;
             menu_.wake();
@@ -660,6 +663,43 @@ void App::toggleRecording() {
         if (recorder_.start(path, sz, cam_->fps(), cfg_.audio))
             std::cout << "recording -> " << path << "\n";
     }
+}
+
+// Flip the live source between the Pi camera and a USB webcam. The other source
+// is opened into a temporary first; only on success do we swap it in, so if the
+// target isn't present (e.g. no webcam plugged in) the running camera keeps
+// going. Any in-progress recording is stopped first -- it belongs to the old
+// source's geometry -- and the digital zoom resets since the new source may have
+// a different resolution.
+void App::switchCamera() {
+    if (!cam_) return;
+    if (recorder_.recording()) {
+        recorder_.stop();
+        refreshThumbnail();
+    }
+
+    CameraKind target = (cam_->kind() == CameraKind::PiCam) ? CameraKind::Webcam
+                                                            : CameraKind::PiCam;
+    Config c = cfg_;
+    c.camera = target;
+    std::unique_ptr<Camera> next = Camera::open(c);
+
+    cameraLabelUntil_ = SDL_GetTicks() + 1800;
+    if (!next) {
+        cameraLabel_ = (target == CameraKind::Webcam) ? "NO USB CAMERA"
+                                                      : "NO PI CAMERA";
+        std::cerr << "camera switch to "
+                  << (target == CameraKind::Webcam ? "webcam" : "picam")
+                  << " failed; keeping current source\n";
+        return;
+    }
+
+    cam_ = std::move(next);
+    lastNative_.release();      // old-format frame no longer matches the new source
+    cameraLabel_ = (cam_->kind() == CameraKind::PiCam) ? "PI CAMERA" : "USB CAMERA";
+    std::cout << "camera: switched to " << cam_->description() << " "
+              << cam_->width() << "x" << cam_->height() << " @ " << cam_->fps()
+              << "fps\n";
 }
 
 // Blocking playback of the selected video: renders frames at the source fps and
@@ -882,6 +922,20 @@ void App::renderCamera() {
                        viewW_ / 2 + tw / 2 + pad, y + 8 * scale + pad,
                        6, 0, 0, 0, 120);
         drawText(viewW_ / 2, y + pad / 2, name, scale, {255, 255, 255, 240}, true);
+    }
+
+    // Source name banner, shown briefly after tapping the switch-camera button.
+    // Sits below the filter banner so the two never overlap.
+    if (now < cameraLabelUntil_ && !cameraLabel_.empty()) {
+        int scale = std::max(2, viewH_ / 200);
+        int tw = 8 * (int)cameraLabel_.size() * scale;
+        int pad = 8 * scale / 2;
+        int y = viewH_ / 6 + 8 * scale + 2 * pad;
+        roundedBoxRGBA(ren_, viewW_ / 2 - tw / 2 - pad, y,
+                       viewW_ / 2 + tw / 2 + pad, y + 8 * scale + pad,
+                       6, 0, 0, 0, 120);
+        drawText(viewW_ / 2, y + pad / 2, cameraLabel_, scale,
+                 {255, 255, 255, 240}, true);
     }
 
     // Shutter flash: a quick white wash that fades out after a capture.

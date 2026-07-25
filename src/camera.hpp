@@ -77,11 +77,17 @@ public:
     double fps() const { return fps_; }
     const std::string& description() const { return desc_; }
 
+    // The concrete source that was actually opened. Never Auto: open() resolves
+    // Auto to whichever backend started, so callers (e.g. the runtime toggle)
+    // always know which physical camera is live.
+    CameraKind kind() const { return kind_; }
+
 private:
     Camera() = default;
 
     cv::VideoCapture cap_;
     PixelFormat format_ = PixelFormat::BGR;
+    CameraKind kind_ = CameraKind::Webcam;
     int width_ = 0;
     int height_ = 0;
     double fps_ = 30.0;

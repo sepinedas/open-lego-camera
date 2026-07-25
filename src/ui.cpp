@@ -61,10 +61,10 @@ std::vector<Button> Menu::layout(Mode mode, int sw, int sh, bool hasVideo) const
                     {Action::Sleep, sw / 2 + dx, y, r}};
         }
         case Mode::Camera:
-            // Zoom is pinch-to-zoom (two fingers), so the row is home / filter /
-            // gallery / shutter / record.
-            return row({Action::Home, Action::CycleFilter, Action::OpenGallery,
-                        Action::Shutter, Action::Record},
+            // Zoom is pinch-to-zoom (two fingers), so the row is home / switch
+            // camera / filter / gallery / shutter / record.
+            return row({Action::Home, Action::SwitchCamera, Action::CycleFilter,
+                        Action::OpenGallery, Action::Shutter, Action::Record},
                        sw, sh);
         case Mode::Gallery: {
             std::vector<Action> a = {Action::Back, Action::Prev};

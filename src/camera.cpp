@@ -90,6 +90,7 @@ std::unique_ptr<Camera> Camera::open(const Config& cfg) {
         if (cam->cap_.read(probe) && !probe.empty() && probe.channels() == 1 &&
             probe.rows % 3 == 0) {
             cam->format_ = PixelFormat::NV12;
+            cam->kind_ = CameraKind::PiCam;
             cam->width_ = probe.cols;
             cam->height_ = probe.rows * 2 / 3; // strip the interleaved UV plane
             cam->desc_ = "Pi camera (libcamera, NV12 -> GPU convert)";
@@ -110,6 +111,7 @@ std::unique_ptr<Camera> Camera::open(const Config& cfg) {
             cv::Mat probe;
             if (cam->cap_.read(probe) && !probe.empty()) {
                 cam->format_ = PixelFormat::BGR;
+                cam->kind_ = CameraKind::PiCam;
                 cam->desc_ = std::string("Pi camera (libcamera, ") + fmt +
                              " -> CPU convert)";
                 return true;
@@ -126,6 +128,7 @@ std::unique_ptr<Camera> Camera::open(const Config& cfg) {
 
     auto openWebcam = [&]() -> bool {
         cam->format_ = PixelFormat::BGR;
+        cam->kind_ = CameraKind::Webcam;
         if (cfg.webcamIndex >= 0) {
             if (!tryWebcam(cam->cap_, cfg.webcamIndex, cfg.width, cfg.height)) return false;
             cam->desc_ = "USB webcam /dev/video" + std::to_string(cfg.webcamIndex);

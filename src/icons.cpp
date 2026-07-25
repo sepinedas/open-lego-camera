@@ -130,6 +130,45 @@ void iconFilter(SDL_Renderer* r, int cx, int cy, int rad, Uint8 a) {
     }
 }
 
+// Switch-camera icon: a small camera body wrapped by two curved arrows, the
+// familiar "flip / swap camera source" glyph. Used to toggle between the Pi
+// camera and a USB webcam at runtime.
+void iconSwitchCamera(SDL_Renderer* r, int cx, int cy, int rad, Uint8 a) {
+    Uint8 c = mod(kFg, a);
+    // Compact camera body in the centre.
+    int w = (int)(rad * 0.5), h = (int)(rad * 0.34);
+    int top = cy - h + (int)(rad * 0.04);
+    roundedBoxRGBA(r, cx - (int)(w * 0.42), top - (int)(rad * 0.14),
+                   cx - (int)(w * 0.06), top + 1, 2, c, c, c, a);
+    roundedRectangleRGBA(r, cx - w, top, cx + w, cy + h, 3, c, c, c, a);
+    filledCircleRGBA(r, cx, cy + (int)(rad * 0.02), std::max(2, (int)(rad * 0.16)),
+                     c, c, c, a);
+    // Two rotation arrows arcing around the body (top-right and bottom-left),
+    // approximated by short chords with a chevron arrowhead at each end.
+    double R = rad * 0.86;
+    auto arc = [&](double a0, double a1) {
+        int px = cx + (int)(R * std::cos(a0));
+        int py = cy + (int)(R * std::sin(a0));
+        for (double t = a0; t <= a1; t += 0.25) {
+            int nx = cx + (int)(R * std::cos(t));
+            int ny = cy + (int)(R * std::sin(t));
+            thickLineRGBA(r, px, py, nx, ny, 2, c, c, c, a);
+            px = nx;
+            py = ny;
+        }
+        // Arrowhead at the arc's end, pointing tangentially.
+        double tan = a1 + 1.5708; // +90deg = travel direction
+        int ex = cx + (int)(R * std::cos(a1)), ey = cy + (int)(R * std::sin(a1));
+        int hl = std::max(3, (int)(rad * 0.26));
+        thickLineRGBA(r, ex, ey, ex + (int)(hl * std::cos(tan - 2.4)),
+                      ey + (int)(hl * std::sin(tan - 2.4)), 2, c, c, c, a);
+        thickLineRGBA(r, ex, ey, ex + (int)(hl * std::cos(tan + 2.4)),
+                      ey + (int)(hl * std::sin(tan + 2.4)), 2, c, c, c, a);
+    };
+    arc(-1.25, -0.15); // upper-right arrow
+    arc(1.89, 2.99);   // lower-left arrow (opposite side)
+}
+
 // Little camera silhouette: the "start camera" button on the welcome screen.
 void iconCamera(SDL_Renderer* r, int cx, int cy, int rad, Uint8 a) {
     Uint8 c = mod(kFg, a);
@@ -221,6 +260,7 @@ void drawIcon(SDL_Renderer* ren, Action action, int cx, int cy, int r,
         case Action::ConfirmYes:  iconCheck(ren, cx, cy, r, alpha); break;
         case Action::ConfirmNo:   iconCross(ren, cx, cy, r, alpha); break;
         case Action::CycleFilter: iconFilter(ren, cx, cy, r, alpha); break;
+        case Action::SwitchCamera: iconSwitchCamera(ren, cx, cy, r, alpha); break;
         case Action::StartCamera: iconCamera(ren, cx, cy, r, alpha); break;
         case Action::Sleep:       iconMoon(ren, cx, cy, r, alpha); break;
         case Action::Home:        iconHouse(ren, cx, cy, r, alpha); break;
