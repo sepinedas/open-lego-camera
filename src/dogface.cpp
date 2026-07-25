@@ -379,22 +379,25 @@ void rasterize(cv::Mat& bgr, const std::vector<Tri>& scene) {
 
 } // namespace
 
-void renderDogFace(cv::Mat& bgr, const cv::Rect& face, float mouthOpen,
-                   double phase) {
+void renderDogFace(cv::Mat& bgr, const cv::Rect& face, float tongueScore,
+                   float roll, double phase) {
     if (bgr.empty() || bgr.type() != CV_8UC3) return;
     const float fx = face.x, fy = face.y, fw = face.width, fh = face.height;
     const float cx = fx + 0.5f * fw;
     const float U = fw;                       // one unit == face width
 
-    // Approximate landmark anchors derived from the face box.
-    const float noseY = fy + 0.60f * fh;      // over the wearer's nose/upper lip
-    const float muzzleY = fy + 0.68f * fh;
-    const float mouthY = fy + 0.86f * fh;
-    const float earY = fy + 0.01f * fh;        // ear roots at the top of the head
+    // Approximate landmark anchors derived from the face box. The muzzle sits
+    // low over the nose/mouth (roughly the lower third of the face); the ears
+    // are rooted *outside* the face box so they frame the head instead of
+    // covering the eyes.
+    const float noseY = fy + 0.62f * fh;      // over the wearer's nose
+    const float muzzleY = fy + 0.74f * fh;    // muzzle centred low, over the mouth
+    const float mouthY = fy + 0.88f * fh;
+    const float earY = fy - 0.05f * fh;        // ear roots just above the head
 
     // Materials (BGR albedo). A warm tan coat with darker ears, a pink inner
     // ear, a wet black nose, a glossy tongue and pale whiskers.
-    static const Material furSnout{{0.42f, 0.62f, 0.82f}, 0.16f, 14.f, 0.16f, false};
+    static const Material furSnout{{0.44f, 0.64f, 0.84f}, 0.16f, 14.f, 0.16f, false};
     static const Material furEar{{0.24f, 0.38f, 0.55f}, 0.10f, 10.f, 0.12f, true};
     static const Material innerEar{{0.60f, 0.66f, 0.93f}, 0.14f, 12.f, 0.10f, true};
     static const Material noseMat{{0.07f, 0.07f, 0.09f}, 0.85f, 48.f, 0.22f, false};
@@ -404,55 +407,70 @@ void renderDogFace(cv::Mat& bgr, const cv::Rect& face, float mouthOpen,
     std::vector<Tri> scene;
     scene.reserve(4096);
 
-    // Muzzle: a rounded bulge over the centre of the face.
-    addMesh(scene, ellipsoid({cx, muzzleY, 0.10f * U},
-                             {0.26f * U, 0.24f * U, 0.20f * U}, 18, 24),
+    // Muzzle: a smooth oval snout over the nose/mouth, a touch taller than wide.
+    addMesh(scene, ellipsoid({cx, muzzleY, 0.11f * U},
+                             {0.20f * U, 0.22f * U, 0.17f * U}, 18, 24),
             furSnout);
 
-    // Nose: a glossy black rounded triangle-ish bulb at the front of the muzzle.
-    addMesh(scene, ellipsoid({cx, noseY, 0.30f * U},
-                             {0.11f * U, 0.085f * U, 0.09f * U}, 14, 18),
+    // Nose: a glossy black bulb at the front-top of the muzzle, wider than tall.
+    addMesh(scene, ellipsoid({cx, noseY, 0.29f * U},
+                             {0.105f * U, 0.078f * U, 0.085f * U}, 14, 18),
             noseMat);
 
     // Whiskers: three per side, fanning out and drooping from the muzzle sides.
     for (int side = -1; side <= 1; side += 2) {
-        V3 rootP{cx + side * 0.16f * U, muzzleY, 0.16f * U};
-        const float ang[3] = {-0.18f, 0.10f, 0.38f};   // slight up / mid / down fan
+        V3 rootP{cx + side * 0.14f * U, muzzleY, 0.15f * U};
+        const float ang[3] = {-0.16f, 0.10f, 0.36f};   // slight up / mid / down fan
         for (int k = 0; k < 3; ++k) {
             V3 dir{(float)side * std::cos(ang[k]), std::sin(ang[k]), 0.05f};
-            addMesh(scene, whisker(rootP, dir, 0.34f * U, 0.05f * U, 0.014f * U),
+            addMesh(scene, whisker(rootP, dir, 0.32f * U, 0.05f * U, 0.013f * U),
                     whiskerMat);
         }
     }
 
-    // Ears: folded floppy ears draped from the top-sides of the head. Each ear
-    // dangles with an organic multi-sine idle motion -- a slow primary swing
-    // plus a faster, smaller flutter -- and the two ears run on offset phases so
-    // they never swing in lockstep, which reads as natural soft-tissue motion.
+    // Ears: folded floppy ears rooted just outside the top corners of the face
+    // and splayed further outward, so they drape down *beside* the head rather
+    // than over it. Each ear dangles with an organic multi-sine idle motion -- a
+    // slow primary swing plus a faster, smaller flutter -- and the two ears run
+    // on offset phases so they never swing in lockstep (natural soft tissue).
     const double t = phase * 0.10;
     for (int side = -1; side <= 1; side += 2) {
         double ph = t + (side > 0 ? 1.9 : 0.0);   // desync the two ears
-        // Side-to-side swing (the dominant motion) and a gentler forward-back
-        // flutter, each a blend of two sine waves so the swing never looks
-        // mechanically periodic.
-        float swayX = 0.14f * (float)(std::sin(ph) + 0.32 * std::sin(2.3 * ph + 0.7));
+        float swayX = 0.13f * (float)(std::sin(ph) + 0.32 * std::sin(2.3 * ph + 0.7));
         float swayZ = 0.06f * (float)std::sin(1.7 * ph + 0.5);
-        V3 root{cx + side * 0.40f * U, earY, -0.02f * U};
+        V3 root{cx + side * 0.54f * U, earY, -0.03f * U};
         V3 innerAt;
-        Mesh e = ear(root, 0.70f * U, 0.19f * U, 0.30f, 0.22f, swayX, swayZ, side,
+        Mesh e = ear(root, 0.66f * U, 0.17f * U, 0.52f, 0.14f, swayX, swayZ, side,
                      &innerAt);
         addMesh(scene, e, furEar);
         // Inner-ear patch nestled on the folded-forward tip of the ear itself
         // (anchored to the ear geometry so it can never drift onto the cheek).
-        addMesh(scene, ellipsoid(innerAt, {0.08f * U, 0.12f * U, 0.05f * U}, 12, 14),
+        addMesh(scene, ellipsoid(innerAt, {0.07f * U, 0.11f * U, 0.05f * U}, 12, 14),
                 innerEar);
     }
 
-    // Tongue: only lolls out when the wearer's own mouth is open.
-    if (mouthOpen > 0.40f) {
-        float open = clamp01((mouthOpen - 0.40f) / 0.50f);
-        addMesh(scene, tongue({cx, mouthY, 0.12f * U}, 0.34f * U, 0.11f * U, open),
+    // Tongue: only lolls out when the wearer is actually sticking their tongue
+    // out (see FaceFilter::tongueOut), not merely opening their mouth.
+    if (tongueScore > 0.5f) {
+        float out = clamp01((tongueScore - 0.5f) / 0.5f);
+        addMesh(scene, tongue({cx, mouthY, 0.12f * U}, 0.34f * U, 0.11f * U, out),
                 tongueMat);
+    }
+
+    // Track the head's roll: rotate the whole rig in the image plane about the
+    // face centre so the ears and muzzle stay aligned with a tilted head.
+    if (std::fabs(roll) > 1e-3f) {
+        const V3 pv{cx, fy + 0.5f * fh, 0};
+        const float cr = std::cos(roll), sr = std::sin(roll);
+        for (Tri& tr : scene)
+            for (int k = 0; k < 3; ++k) {
+                float dx = tr.p[k].x - pv.x, dy = tr.p[k].y - pv.y;
+                tr.p[k].x = pv.x + dx * cr - dy * sr;
+                tr.p[k].y = pv.y + dx * sr + dy * cr;
+                float nx = tr.n[k].x, ny = tr.n[k].y;   // rotate normals too
+                tr.n[k].x = nx * cr - ny * sr;
+                tr.n[k].y = nx * sr + ny * cr;
+            }
     }
 
     rasterize(bgr, scene);

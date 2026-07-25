@@ -210,11 +210,13 @@ or video you then capture.
 - **Crying** curls your mouth down into a frown, pinches your inner brows down,
   and streams animated tears down your cheeks.
 - **Dog Face** maps real-time **3D assets** onto your face — folded floppy ears
-  (with a pink inner ear on the fold), a rounded muzzle, a glossy black nose,
-  whiskers, and a lolling tongue that *only appears when your own mouth opens*.
-  Unlike the reshaping filters these are genuine lit geometry, not 2D stickers:
-  a tiny software 3D pipeline (`dogface.cpp`) shades every asset with a Phong
-  key light and supersampled edges, so the surfaces read as smooth and rounded.
+  (with a pink inner ear on the fold) rooted *outside* the face so they frame
+  your head, a rounded muzzle, a glossy black nose, whiskers, and a tongue that
+  *only lolls out when you actually stick your tongue out* (not merely open your
+  mouth). The whole rig **tracks your head tilt** — it rotates with the angle of
+  your eyes. Unlike the reshaping filters these are genuine lit geometry, not 2D
+  stickers: a tiny software 3D pipeline (`dogface.cpp`) shades every asset with a
+  Phong key light and supersampled edges, so the surfaces read smooth and rounded.
 
 The **Big Smile** and **Crying** filters *warp your actual face* — no cartoon
 mouth or eyes are pasted on top; only the crying tears are drawn over the image.
@@ -223,7 +225,11 @@ Faces are found with a stock OpenCV Haar cascade, so no landmark model or
 `opencv_contrib` build is required — keeping it light enough for the Pi Zero
 2 W. The dog rig is anchored to a handful of landmark points (ear roots, muzzle,
 nose, mouth line) derived from that single face box rather than a full FaceMesh,
-which is what keeps the 3D filter within the Pi Zero's budget.
+which is what keeps the 3D filter within the Pi Zero's budget. Two lightweight
+signals drive it: the **head-roll** used to rotate the rig comes from the angle
+between the eyes (a stock eye Haar cascade), and the **tongue** only appears when
+the lower-mouth region reads as saturated pink/red well above the cheek's skin
+tone — so a plain open mouth keeps the tongue in.
 
 ### Rotating the display
 

@@ -16,11 +16,13 @@ namespace olc {
 // deliberately avoids a heavyweight FaceMesh model -- see filters.hpp -- so we
 // place the 3D assets on this lightweight approximate landmark frame.
 //
-//   mouthOpen  0..1 estimate of how open the user's own mouth is. The tongue
-//              only lolls out when the mouth is open (>~0.4), matching the
-//              WhatsApp/Snapchat dog filter behaviour.
+//   tongue     0..1 estimate that the user is *sticking their tongue out*. The
+//              dog tongue only lolls out to match -- an open mouth alone is not
+//              enough, so a plain smile or an "aah" keeps the tongue in.
+//   roll       head-roll angle in radians (from the eye line); the whole rig is
+//              rotated by it so the ears/muzzle track a tilted head.
 //   phase      free-running per-frame counter; drives a subtle idle ear sway.
-void renderDogFace(cv::Mat& bgr, const cv::Rect& face, float mouthOpen,
+void renderDogFace(cv::Mat& bgr, const cv::Rect& face, float tongue, float roll,
                    double phase);
 
 } // namespace olc

@@ -68,12 +68,26 @@ private:
     // Draw the falling tears of the crying filter.
     void drawTears(cv::Mat& frame, const cv::Rect& face, double phase) const;
 
+    // 0..1 estimate that a tongue is actually stuck out: the lower-mouth patch
+    // is pink/red and much more saturated than the cheek (skin) reference, and
+    // only counts when the mouth is at least a little open. Used to gate the dog
+    // filter's tongue so it mirrors the wearer rather than any open mouth.
+    float tongueOut(const cv::Mat& frame, const cv::Rect& face) const;
+    // Head-roll (radians) from the eye line inside `faceSmall` (detection-scale
+    // coords). Returns NaN when the two eyes can't be found. Used to rotate the
+    // dog rig so it tracks a tilted head.
+    float estimateRoll(const cv::Mat& small, const cv::Rect& faceSmall);
+
     cv::CascadeClassifier face_;
+    cv::CascadeClassifier eyes_;         // for head-roll estimation (dog filter)
     bool loaded_ = false;
+    bool eyesLoaded_ = false;
     bool warned_ = false;                // "no cascade" logged only once
     int frameCount_ = 0;                 // detection runs every few frames
     std::vector<cv::Rect> faces_;        // last detection result, full-res
+    float roll_ = 0.f;                   // smoothed head-roll, radians
 };
+
 
 // Cycle order for the on-screen filter button: None -> BigSmile -> Crying ->.
 Filter nextFilter(Filter f);

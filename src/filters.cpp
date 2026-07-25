@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <limits>
 
 #include <opencv2/imgproc.hpp>
 
@@ -27,6 +28,15 @@ const char* kCascadePaths[] = {
     "/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml",
     "/usr/local/share/opencv4/haarcascades/haarcascade_frontalface_default.xml",
     "/usr/share/OpenCV/haarcascades/haarcascade_frontalface_default.xml",
+};
+
+// Eye cascade, tried in the same locations. Only used to estimate head-roll for
+// the dog filter; if it is missing the dog simply renders upright.
+const char* kEyeCascadePaths[] = {
+    "/usr/share/opencv4/haarcascades/haarcascade_eye.xml",
+    "/usr/share/opencv/haarcascades/haarcascade_eye.xml",
+    "/usr/local/share/opencv4/haarcascades/haarcascade_eye.xml",
+    "/usr/share/OpenCV/haarcascades/haarcascade_eye.xml",
 };
 
 float clamp01(float v) { return v < 0.f ? 0.f : (v > 1.f ? 1.f : v); }
@@ -188,6 +198,12 @@ FaceFilter::FaceFilter() {
             break;
         }
     }
+    for (const char* p : kEyeCascadePaths) {
+        if (eyes_.load(p)) {
+            eyesLoaded_ = true;
+            break;
+        }
+    }
 }
 
 void FaceFilter::setCascade(const std::string& path) {
@@ -223,6 +239,46 @@ void FaceFilter::detectLuma(const cv::Mat& luma) {
         faces_.emplace_back((int)std::lround(r.x * inv), (int)std::lround(r.y * inv),
                             (int)std::lround(r.width * inv),
                             (int)std::lround(r.height * inv));
+
+    // Estimate head-roll from the eyes of the largest face and ease the smoothed
+    // angle toward it (or decay back to level when the eyes aren't found), so
+    // the dog rig follows a tilted head without jittering frame-to-frame.
+    float rr = std::numeric_limits<float>::quiet_NaN();
+    if (!found.empty()) {
+        const cv::Rect* big = &found[0];
+        for (const cv::Rect& r : found)
+            if (r.area() > big->area()) big = &r;
+        rr = estimateRoll(small, *big);
+    }
+    if (!std::isnan(rr)) roll_ += 0.5f * (rr - roll_);
+    else roll_ *= 0.85f;
+    roll_ = std::max(-0.7f, std::min(0.7f, roll_));
+}
+
+float FaceFilter::estimateRoll(const cv::Mat& small, const cv::Rect& f) {
+    if (!eyesLoaded_) return std::numeric_limits<float>::quiet_NaN();
+    // Search the eye band (upper-middle of the face) for the two eyes.
+    cv::Rect band(f.x, f.y + (int)(0.20f * f.height), f.width,
+                  (int)(0.42f * f.height));
+    band &= cv::Rect(0, 0, small.cols, small.rows);
+    if (band.width < 12 || band.height < 8) return std::numeric_limits<float>::quiet_NaN();
+
+    std::vector<cv::Rect> es;
+    int minEye = std::max(8, f.width / 8);
+    eyes_.detectMultiScale(small(band), es, 1.15, 3, 0, cv::Size(minEye, minEye),
+                           cv::Size(f.width / 2, f.height / 2));
+    if (es.size() < 2) return std::numeric_limits<float>::quiet_NaN();
+
+    // Keep the two largest detections, then order them left-to-right.
+    std::sort(es.begin(), es.end(),
+              [](const cv::Rect& a, const cv::Rect& b) { return a.area() > b.area(); });
+    cv::Point2f e0(es[0].x + es[0].width * 0.5f, es[0].y + es[0].height * 0.5f);
+    cv::Point2f e1(es[1].x + es[1].width * 0.5f, es[1].y + es[1].height * 0.5f);
+    cv::Point2f left = (e0.x <= e1.x) ? e0 : e1;
+    cv::Point2f right = (e0.x <= e1.x) ? e1 : e0;
+    float dx = right.x - left.x, dy = right.y - left.y;
+    if (dx < 0.15f * f.width) return std::numeric_limits<float>::quiet_NaN(); // implausible
+    return std::atan2(dy, dx);
 }
 
 void FaceFilter::apply(cv::Mat& frame, Filter filter, double phase) {
@@ -276,9 +332,11 @@ cv::Rect FaceFilter::dirtyRegion(Filter filter, int w, int h) const {
     cv::Rect uni;
     for (const cv::Rect& f : faces_) {
         if (f.width < 40 || f.height < 40) continue;
-        int mx = dog ? std::max(10, f.width * 2 / 5) : std::max(8, f.width * 2 / 5);
+        // The dog's ears root outside the face box and splay further out, and the
+        // whole rig rotates with the head, so it needs a much wider margin.
+        int mx = dog ? std::max(10, f.width * 68 / 100) : std::max(8, f.width * 2 / 5);
         int mtop = dog ? std::max(10, f.height * 2 / 5) : std::max(6, f.height * 3 / 10);
-        int mbot = dog ? std::max(10, f.height * 2 / 5) : std::max(8, f.height / 2);
+        int mbot = dog ? std::max(10, f.height * 9 / 20) : std::max(8, f.height / 2);
         cv::Rect r(f.x - mx, f.y - mtop, f.width + 2 * mx, f.height + mtop + mbot);
         uni = (uni.area() == 0) ? r : (uni | r);
     }
@@ -305,7 +363,7 @@ void FaceFilter::applyRegion(cv::Mat& roi, cv::Point origin, Filter filter,
         if (filter == Filter::BigSmile) applySmile(roi, face);
         else if (filter == Filter::Crying) applyCry(roi, face, phase);
         else if (filter == Filter::DogFace)
-            renderDogFace(roi, face, mouthOpenness(roi, face), phase);
+            renderDogFace(roi, face, tongueOut(roi, face), roll_, phase);
     }
 }
 
@@ -321,6 +379,47 @@ float FaceFilter::mouthOpenness(const cv::Mat& frame, const cv::Rect& f) const {
     // A closed mouth is fairly flat; an open one pairs a dark cavity with bright
     // teeth, so its patch has high contrast. Map that spread onto 0..1.
     return clamp01((float)(stddev[0] / 55.0));
+}
+
+float FaceFilter::tongueOut(const cv::Mat& frame, const cv::Rect& f) const {
+    // A tongue can only be out if the mouth is at least a little open; this also
+    // stops closed red lips from ever counting.
+    float open = mouthOpenness(frame, f);
+    if (open < 0.22f) return 0.f;
+
+    // Lower-mouth patch (where a protruding tongue sits) plus a cheek patch as a
+    // per-person skin reference, so naturally ruddy skin doesn't false-fire.
+    cv::Rect mouth((int)(f.x + 0.34f * f.width), (int)(f.y + 0.72f * f.height),
+                   (int)(0.32f * f.width), (int)(0.22f * f.height));
+    cv::Rect cheek((int)(f.x + 0.12f * f.width), (int)(f.y + 0.55f * f.height),
+                   (int)(0.16f * f.width), (int)(0.16f * f.height));
+    cv::Rect bounds(0, 0, frame.cols, frame.rows);
+    mouth &= bounds;
+    cheek &= bounds;
+    if (mouth.area() < 30 || cheek.area() < 20) return 0.f;
+
+    // Fraction of a patch that reads as saturated pink/red (tongue colour).
+    auto pinkFrac = [](const cv::Mat& bgr) {
+        cv::Mat hsv;
+        cv::cvtColor(bgr, hsv, cv::COLOR_BGR2HSV);
+        int hit = 0, tot = hsv.rows * hsv.cols;
+        for (int y = 0; y < hsv.rows; ++y) {
+            const cv::Vec3b* row = hsv.ptr<cv::Vec3b>(y);
+            for (int x = 0; x < hsv.cols; ++x) {
+                int h = row[x][0], s = row[x][1], v = row[x][2];
+                bool red = (h <= 14 || h >= 160);      // OpenCV hue is 0..179
+                if (red && s >= 95 && v >= 55) ++hit;
+            }
+        }
+        return tot ? (float)hit / (float)tot : 0.f;
+    };
+    float mp = pinkFrac(frame(mouth)), sp = pinkFrac(frame(cheek));
+    // Needs to be pinker than the cheek *and* pink in absolute terms, scaled by
+    // how open the mouth is. Kept deliberately strict so it only fires on a
+    // clearly protruding tongue, not a plain open-mouthed "aah".
+    float rel = clamp01((mp - sp - 0.08f) / 0.30f);
+    float abs = clamp01((mp - 0.12f) / 0.22f);
+    return rel * abs * clamp01(open / 0.40f);
 }
 
 void FaceFilter::whitenTeeth(cv::Mat& frame, const cv::Rect& f, float open) const {
