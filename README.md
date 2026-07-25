@@ -32,10 +32,13 @@ A touch-friendly, **icon-only** camera app for the **Raspberry Pi Zero 2 W**
   capture **date & time** is shown translucent across the top.
 - **WhatsApp-style facial filters** (smiley button): a **Big Smile** that
   stretches your mouth into a wide grin — with your teeth brightening as you
-  open it — and a **Crying** face that pulls your mouth and brows into a frown
-  and adds animated falling **tears**. The face is *reshaped in place* (its own
-  pixels warped), not covered with cartoon graphics — only the tears are drawn
-  on top. Applies live to the preview and to captured photos/videos.
+  open it — a **Crying** face that pulls your mouth and brows into a frown
+  and adds animated falling **tears**, and a **Dog Face** that maps real-time
+  **3D assets** (folded floppy ears, a rounded muzzle, a glossy nose, whiskers
+  and a lolling tongue) onto your face — the tongue only pops out when your own
+  mouth is open. The reshaping filters warp your face *in place*; the dog is
+  lit 3D geometry composited on top. Applies live to the preview and to
+  captured photos/videos.
 
 ![Welcome screen](docs/welcome-screen.png)
 
@@ -57,6 +60,7 @@ A touch-friendly, **icon-only** camera app for the **Raspberry Pi Zero 2 W**
 | Icon-only buttons, no text | all icons are drawn as vector shapes (`icons.cpp`, SDL2_gfx) |
 | Headless — no X11 / window manager | SDL2 `kmsdrm`/`fbcon` renders directly to HDMI |
 | WhatsApp-style facial filters | `FaceFilter` finds the face (Haar cascade) and warps the mouth/brows with `cv::remap`; the crying filter also draws tears (`filters.cpp`) |
+| 3D dog-face filter | `dogface.cpp` — a small software 3D pipeline (Phong shading + supersampled coverage, z-buffer) renders folded ears, muzzle, nose, whiskers and a mouth-gated tongue onto landmark anchors from the face box |
 
 ## Dependencies
 
@@ -196,20 +200,30 @@ build/open-lego-camera [options]
 ### Facial filters
 
 Tap the **smiley** button in the camera menu to cycle the live
-facial filter: **Big Smile** → **Crying** → off. The active filter's name
-appears briefly on screen, and the effect is baked into any photo or video you
-then capture.
+facial filter: **Big Smile** → **Crying** → **Dog Face** → off. The active
+filter's name appears briefly on screen, and the effect is baked into any photo
+or video you then capture.
 
 - **Big Smile** stretches your mouth's corners up and out into a wide grin and
   opens it vertically; the more you open your mouth, the more your teeth are
   brightened, so they "pop".
 - **Crying** curls your mouth down into a frown, pinches your inner brows down,
   and streams animated tears down your cheeks.
+- **Dog Face** maps real-time **3D assets** onto your face — folded floppy ears
+  (with a pink inner ear on the fold), a rounded muzzle, a glossy black nose,
+  whiskers, and a lolling tongue that *only appears when your own mouth opens*.
+  Unlike the reshaping filters these are genuine lit geometry, not 2D stickers:
+  a tiny software 3D pipeline (`dogface.cpp`) shades every asset with a Phong
+  key light and supersampled edges, so the surfaces read as smooth and rounded.
 
-Both filters *warp your actual face* — no cartoon mouth or eyes are pasted on
-top; only the crying tears are drawn over the image. Faces are found with a
-stock OpenCV Haar cascade, so no landmark model or `opencv_contrib` build is
-required — keeping it light enough for the Pi Zero 2 W.
+The **Big Smile** and **Crying** filters *warp your actual face* — no cartoon
+mouth or eyes are pasted on top; only the crying tears are drawn over the image.
+The **Dog Face** assets are shaded 3D meshes composited on top of the frame.
+Faces are found with a stock OpenCV Haar cascade, so no landmark model or
+`opencv_contrib` build is required — keeping it light enough for the Pi Zero
+2 W. The dog rig is anchored to a handful of landmark points (ear roots, muzzle,
+nose, mouth line) derived from that single face box rather than a full FaceMesh,
+which is what keeps the 3D filter within the Pi Zero's budget.
 
 ### Rotating the display
 

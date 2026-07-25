@@ -6,6 +6,8 @@
 
 #include <opencv2/imgproc.hpp>
 
+#include "dogface.hpp"
+
 namespace olc {
 
 namespace {
@@ -267,12 +269,16 @@ cv::Rect FaceFilter::dirtyRegion(Filter filter, int w, int h) const {
     // Gaussian falloff (~half a face width) and the tears that fall down the
     // cheeks below the eyes. One face -> a tight box; several -> a larger box,
     // still far cheaper than converting the whole frame.
+    // The dog filter's 3D assets reach beyond the face box -- folded ears rise
+    // above and splay past the temples, the tongue and muzzle hang below -- so
+    // it needs a wider margin than the in-place reshapers.
+    const bool dog = (filter == Filter::DogFace);
     cv::Rect uni;
     for (const cv::Rect& f : faces_) {
         if (f.width < 40 || f.height < 40) continue;
-        int mx = std::max(8, f.width * 2 / 5);
-        int mtop = std::max(6, f.height * 3 / 10);
-        int mbot = std::max(8, f.height / 2);
+        int mx = dog ? std::max(10, f.width * 2 / 5) : std::max(8, f.width * 2 / 5);
+        int mtop = dog ? std::max(10, f.height * 2 / 5) : std::max(6, f.height * 3 / 10);
+        int mbot = dog ? std::max(10, f.height * 2 / 5) : std::max(8, f.height / 2);
         cv::Rect r(f.x - mx, f.y - mtop, f.width + 2 * mx, f.height + mtop + mbot);
         uni = (uni.area() == 0) ? r : (uni | r);
     }
@@ -298,6 +304,8 @@ void FaceFilter::applyRegion(cv::Mat& roi, cv::Point origin, Filter filter,
                       faceFrame.width, faceFrame.height);
         if (filter == Filter::BigSmile) applySmile(roi, face);
         else if (filter == Filter::Crying) applyCry(roi, face, phase);
+        else if (filter == Filter::DogFace)
+            renderDogFace(roi, face, mouthOpenness(roi, face), phase);
     }
 }
 
@@ -426,7 +434,8 @@ Filter nextFilter(Filter f) {
     switch (f) {
         case Filter::None:     return Filter::BigSmile;
         case Filter::BigSmile: return Filter::Crying;
-        case Filter::Crying:   return Filter::None;
+        case Filter::Crying:   return Filter::DogFace;
+        case Filter::DogFace:  return Filter::None;
     }
     return Filter::None;
 }
@@ -436,6 +445,7 @@ const char* filterName(Filter f) {
         case Filter::None:     return "Filter Off";
         case Filter::BigSmile: return "Big Smile";
         case Filter::Crying:   return "Crying";
+        case Filter::DogFace:  return "Dog Face";
     }
     return "";
 }

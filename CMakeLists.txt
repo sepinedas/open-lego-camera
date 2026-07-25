@@ -29,6 +29,7 @@ add_executable(open-lego-camera
   src/icons.cpp
   src/ui.cpp
   src/filters.cpp
+  src/dogface.cpp
   src/app.cpp
 )
 

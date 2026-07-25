@@ -44,6 +44,7 @@ enum class Filter {
     None,
     BigSmile, // mouth stretched into a wide grin; teeth pop when it opens
     Crying,   // mouth/brows pulled into a frown, with falling tears
+    DogFace,  // 3D dog assets (folded ears, muzzle, nose, whiskers, tongue)
 };
 
 } // namespace olc
