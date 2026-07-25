@@ -124,43 +124,51 @@ Mesh ellipsoid(V3 c, V3 r, int nu = 16, int nv = 20) {
     return m;
 }
 
-// One floppy, folded ear. Built in a local frame (origin at the ear root, +y
-// down the ear, +x across its width) as a curved leaf, then the lower portion
-// is *folded* forward over a crease -- the "folded ear" look. Finally the whole
-// ear is splayed outward, hung down the side of the head, swayed a touch for
-// life, and mirrored for the right side.
-Mesh ear(V3 root, float len, float halfW, float splay, float sway, int side,
-         V3* innerAnchor = nullptr) {
+// One floppy, folded ear. Built in a canonical (left-side) local frame -- origin
+// at the ear root, +y running *down* the ear, +x across its width -- as a curved
+// leaf whose lower half folds forward over a crease (the "folded ear" look). The
+// ear then drapes down and slightly out/forward from the side of the head. The
+// dangle is animated as a bend that grows toward the tip (`swayX` side-to-side,
+// `swayZ` forward-back), so the ear jiggles like soft tissue -- the root barely
+// moves while the tip swings -- instead of swinging as one rigid flap. Mirrored
+// for the right side.
+Mesh ear(V3 root, float len, float halfW, float splay, float lean, float swayX,
+         float swayZ, int side, V3* innerAnchor = nullptr) {
     Mesh m;
     const float PI = 3.14159265358979f;
     const int N = 16, M = 10;               // length x width tessellation
-    const float foldS = 0.55f;              // crease sits ~55% down the ear
-    const float foldA = 1.15f;              // fold angle (radians) forward+up
+    const float foldS = 0.50f;              // crease sits ~half-way down the ear
+    const float foldA = 0.95f;              // fold angle (radians), forward
     V3 pivot{0, len * foldS, 0};
     for (int i = 0; i <= N; ++i) {
         float s = (float)i / N;
         float L = len * s;
         // Rounded leaf silhouette: wide, rounded shoulders near the root,
         // tapering to a soft point at the tip.
-        float lobe = std::pow(std::sin(PI * clamp01(0.10f + 0.90f * s)), 0.75f);
+        float lobe = std::pow(std::sin(PI * clamp01(0.12f + 0.88f * s)), 0.72f);
         float w = halfW * lobe;
+        // Soft-tissue bend profile: ~0 at the root, growing to 1 at the tip so
+        // the swing accumulates down the ear (the tip leads, the base lags).
+        float bend = s * s;
         for (int j = 0; j <= M; ++j) {
             float t = -1.f + 2.f * (float)j / M;
             // Convex cross-section so the ear has a smooth rounded surface.
-            float z = 0.28f * halfW * (1.f - t * t);
+            float z = 0.26f * halfW * (1.f - t * t);
             V3 p{t * w, L, z};
             // Fold the lower part forward over the crease (creates the fold).
-            if (s > foldS) p = rotX(p, pivot, -foldA);
+            if (s > foldS) p = rotX(p, pivot, foldA);
+            // Animated dangle, accumulated toward the tip.
+            p = rotZ(p, {0, 0, 0}, swayX * bend);   // side-to-side swing
+            p = rotX(p, {0, 0, 0}, swayZ * bend);   // gentle forward-back flutter
             m.pos.push_back(p);
         }
     }
     m.grid(N + 1, M + 1, 0);
-    // Place the ear: hang it downward, splay it outward from the head, add a
-    // gentle idle sway, mirror for the right ear, then translate onto the head.
-    float hang = 2.35f;                      // rotate the leaf to hang down-out
+    // Rest pose: splay the ear outward and lean it a touch forward so it drapes
+    // down the side of the head, then mirror for the right ear and translate on.
     for (V3& p : m.pos) {
-        p = rotX(p, {0, 0, 0}, hang);        // swing from pointing-down to out
-        p = rotZ(p, {0, 0, 0}, splay + sway);// splay outward + idle sway
+        p = rotX(p, {0, 0, 0}, lean);        // lean slightly toward the camera
+        p = rotZ(p, {0, 0, 0}, splay);       // splay outward from the head
         p.x *= (float)side;                  // mirror for the right ear
         p = p + root;
     }
@@ -382,7 +390,7 @@ void renderDogFace(cv::Mat& bgr, const cv::Rect& face, float mouthOpen,
     const float noseY = fy + 0.60f * fh;      // over the wearer's nose/upper lip
     const float muzzleY = fy + 0.68f * fh;
     const float mouthY = fy + 0.86f * fh;
-    const float earY = fy + 0.06f * fh;        // ear roots at the temples
+    const float earY = fy + 0.01f * fh;        // ear roots at the top of the head
 
     // Materials (BGR albedo). A warm tan coat with darker ears, a pink inner
     // ear, a wet black nose, a glossy tongue and pale whiskers.
@@ -417,12 +425,21 @@ void renderDogFace(cv::Mat& bgr, const cv::Rect& face, float mouthOpen,
         }
     }
 
-    // Ears: folded floppy ears hung from the temples, with a gentle idle sway.
-    float sway = 0.05f * (float)std::sin(phase * 0.08);
+    // Ears: folded floppy ears draped from the top-sides of the head. Each ear
+    // dangles with an organic multi-sine idle motion -- a slow primary swing
+    // plus a faster, smaller flutter -- and the two ears run on offset phases so
+    // they never swing in lockstep, which reads as natural soft-tissue motion.
+    const double t = phase * 0.10;
     for (int side = -1; side <= 1; side += 2) {
-        V3 root{cx + side * 0.42f * U, earY, -0.02f * U};
+        double ph = t + (side > 0 ? 1.9 : 0.0);   // desync the two ears
+        // Side-to-side swing (the dominant motion) and a gentler forward-back
+        // flutter, each a blend of two sine waves so the swing never looks
+        // mechanically periodic.
+        float swayX = 0.14f * (float)(std::sin(ph) + 0.32 * std::sin(2.3 * ph + 0.7));
+        float swayZ = 0.06f * (float)std::sin(1.7 * ph + 0.5);
+        V3 root{cx + side * 0.40f * U, earY, -0.02f * U};
         V3 innerAt;
-        Mesh e = ear(root, 0.72f * U, 0.20f * U, side * 0.55f, side * sway, side,
+        Mesh e = ear(root, 0.70f * U, 0.19f * U, 0.30f, 0.22f, swayX, swayZ, side,
                      &innerAt);
         addMesh(scene, e, furEar);
         // Inner-ear patch nestled on the folded-forward tip of the ear itself
