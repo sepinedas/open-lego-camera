@@ -218,6 +218,34 @@ the fix (enable I2C, join the `i2c` group, or check wiring with
 The charge estimate maps a single Li-ion cell's `3.0 V` (empty) → `4.2 V` (full)
 onto 0–100 %, reading the INA219's bus-voltage register directly.
 
+#### With a Pimoroni HyperPixel (I2C pin conflict)
+
+The HyperPixel drives the display over the GPIO header and claims GPIO 2 & 3 —
+the pins the hardware I2C bus (`i2c_arm`, `/dev/i2c-1`) uses — so you can't put
+the UPS HAT on the normal I2C bus. The INA219 is an I2C-only chip, so it still
+needs *an* I2C bus, but you can make a **software one on the two pins HyperPixel
+leaves free**: GPIO 0 & 1 (the ID_SD/ID_SC EEPROM pins, physical pins 27 & 28).
+
+Add a bit-banged I2C bus in `/boot/firmware/config.txt` (keep the HyperPixel
+overlay; do **not** also set `dtparam=i2c_arm=on`):
+
+```
+dtoverlay=i2c-gpio,i2c_gpio_sda=0,i2c_gpio_scl=1,bus=3
+```
+
+Wire the INA219's **SDA → pin 27 (GPIO 0)** and **SCL → pin 28 (GPIO 1)** (plus
+3V3 and GND), reboot, confirm it with `i2cdetect -y 3`, then point the app at
+that bus:
+
+```sh
+build/open-lego-camera --i2c-bus 3
+```
+
+No app change is needed — a software `i2c-gpio` bus is an ordinary `/dev/i2c-N`
+device, so `--i2c-bus` (and, if needed, `--battery-address`) is all it takes. If
+your kernel ignores the `bus=3` hint, check the assigned number with
+`i2cdetect -l` and pass that instead.
+
 ### Facial filters
 
 Tap the **smiley** button (bottom-left in the camera view) to cycle the live
