@@ -90,7 +90,11 @@ if(WITH_MEDIAPIPE)
   # MediaPipe's exported headers are compiled as C++20 (its api3 framework uses
   # consteval / class-type NTTPs), so raise the standard for the whole target.
   set_target_properties(open-lego-camera PROPERTIES CXX_STANDARD 20)
-  target_compile_definitions(open-lego-camera PRIVATE OLC_WITH_MEDIAPIPE=1)
+  # The library is built CPU-only (MEDIAPIPE_DISABLE_GPU=1); define the same
+  # macro downstream so headers like image.h don't pull in GPU code paths whose
+  # symbols aren't in libmediapipe_tasks.so.
+  target_compile_definitions(open-lego-camera PRIVATE
+    OLC_WITH_MEDIAPIPE=1 MEDIAPIPE_DISABLE_GPU=1)
   target_include_directories(open-lego-camera PRIVATE "${_mp_root}/include")
   target_link_libraries(open-lego-camera PRIVATE "${MEDIAPIPE_TASKS_LIB}")
 endif()

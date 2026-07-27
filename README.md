@@ -95,8 +95,11 @@ corners, lips, brows and eyes (468-point mesh): the grin follows your actual
 mouth at any size and head tilt, and the tears well from your real eyes.
 
 It links against the prebuilt aarch64 MediaPipe artifacts from
-[**media-pipe-builder**](https://github.com/sepinedas/media-pipe-builder).
-Install the `.deb` on 64-bit Raspberry Pi OS (Bookworm) and grab the model:
+[**media-pipe-builder**](https://github.com/sepinedas/media-pipe-builder). Use a
+release whose `include/` bundles the pinned dependency headers (Abseil, protobuf,
+Eigen, flatbuffers, glog) — MediaPipe's headers `#include` them and they can't be
+taken from the distro (version/ABI mismatch). Install the `.deb` on 64-bit
+Raspberry Pi OS (Bookworm) and grab the model:
 
 ```sh
 # 1. MediaPipe Tasks Vision C++ library (installs to /opt/mediapipe/<ver>)
