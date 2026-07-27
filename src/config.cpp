@@ -65,6 +65,10 @@ static void printUsage(const char* prog) {
         "  --no-audio                   record video without sound\n"
         "  --face-cascade PATH          Haar face-cascade XML for the facial\n"
         "                               filters (default: system opencv-data)\n"
+        "  --face-landmarker PATH       MediaPipe face_landmarker.task model for\n"
+        "                               higher-quality filters (needs a build with\n"
+        "                               -DWITH_MEDIAPIPE=ON); falls back to the\n"
+        "                               Haar cascade when absent\n"
         "  --help                       show this help\n";
 }
 
@@ -149,6 +153,9 @@ bool parseArgs(int argc, char** argv, Config& out, int* exitCode) {
         } else if (a == "--face-cascade") {
             const char* v = need(i); if (!v) return false;
             out.faceCascade = v;
+        } else if (a == "--face-landmarker") {
+            const char* v = need(i); if (!v) return false;
+            out.faceLandmarker = v;
         } else {
             std::cerr << "unknown option: " << a << " (try --help)\n";
             *exitCode = 2;

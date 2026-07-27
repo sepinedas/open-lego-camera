@@ -56,7 +56,7 @@ A touch-friendly, **icon-only** camera app for the **Raspberry Pi Zero 2 W**
 | Photos, video **with audio**, zoom, gallery, delete | shutter / record / gallery icons; pinch-to-zoom; `arecord`+`ffmpeg` mux audio |
 | Icon-only buttons, no text | all icons are drawn as vector shapes (`icons.cpp`, SDL2_gfx) |
 | Headless — no X11 / window manager | SDL2 `kmsdrm`/`fbcon` renders directly to HDMI |
-| WhatsApp-style facial filters | `FaceFilter` finds the face (Haar cascade) and warps the mouth/brows with `cv::remap`; the crying filter also draws tears (`filters.cpp`) |
+| WhatsApp-style facial filters | `FaceFilter` locates facial landmarks (MediaPipe Face Mesh when built in, else a Haar-cascade approximation) and warps the mouth/brows with `cv::remap`; the crying filter also draws tears (`filters.cpp`, `landmarks.hpp`, `mp_landmarker.cpp`) |
 
 ## Dependencies
 
@@ -85,6 +85,43 @@ sudo apt install opencv-data
 If the cascade lives somewhere non-standard, point the app at it with
 `--face-cascade /path/to/haarcascade_frontalface_default.xml`. Without a
 cascade the app still runs — the facial filters simply stay inactive.
+
+#### Higher-quality filters with MediaPipe (optional)
+
+The Haar cascade only gives a face *box*, so the smile/cry warps are anchored by
+fixed proportions of that box. For a noticeably better result you can build with
+the **MediaPipe Face Mesh** backend, which pins the warp to the **real** mouth
+corners, lips, brows and eyes (468-point mesh): the grin follows your actual
+mouth at any size and head tilt, and the tears well from your real eyes.
+
+It links against the prebuilt aarch64 MediaPipe artifacts from
+[**media-pipe-builder**](https://github.com/sepinedas/media-pipe-builder).
+Install the `.deb` on 64-bit Raspberry Pi OS (Bookworm) and grab the model:
+
+```sh
+# 1. MediaPipe Tasks Vision C++ library (installs to /opt/mediapipe/<ver>)
+sudo dpkg -i libmediapipe_*_arm64.deb
+
+# 2. The Face Landmarker model bundle (downloaded once, not shipped in the .deb)
+sudo mkdir -p /opt/mediapipe/models
+sudo curl -L -o /opt/mediapipe/models/face_landmarker.task \
+  https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
+```
+
+Then configure the build with `-DWITH_MEDIAPIPE=ON` (CMake auto-detects the
+newest `/opt/mediapipe/<ver>`; override with `-DMEDIAPIPE_ROOT=…`), and run with
+`--face-landmarker`:
+
+```sh
+cmake -B build -DWITH_MEDIAPIPE=ON
+cmake --build build -j
+build/open-lego-camera --face-landmarker /opt/mediapipe/models/face_landmarker.task
+```
+
+Everything degrades gracefully: build without `-DWITH_MEDIAPIPE=ON` (the
+default) and the app is exactly as before; build with it but launch without a
+model — or with a model that fails to load — and it falls back to the Haar
+cascade. So MediaPipe is a pure opt-in quality upgrade, not a new requirement.
 
 For the **Pi camera module** you also need the libcamera GStreamer element,
 which is what lets OpenCV open the camera without a desktop:
@@ -120,13 +157,16 @@ A frame is only converted to BGR on the CPU when something actually needs the
 pixels — taking a photo or recording — so the common "just previewing" case
 does no colour conversion or resize on the CPU at all.
 
-The **facial filters** stay on that fast path too. Face detection runs directly
-on the NV12 **Y (luma) plane** — which _is_ a grayscale image — so it needs no
-conversion, and only the **face region** is converted to BGR, reshaped, and
-re-encoded back into the NV12 frame. The GPU still converts and zooms the whole
-frame, so filtering costs work proportional to the face's size on screen rather
-than a full-frame convert every frame. (A USB webcam, which delivers BGR, still
-converts the whole frame for filters.)
+The **facial filters** stay on that fast path too. With the Haar cascade, face
+detection runs directly on the NV12 **Y (luma) plane** — which _is_ a grayscale
+image — so it needs no conversion; only the **face region** is converted to BGR,
+reshaped, and re-encoded back into the NV12 frame. The GPU still converts and
+zooms the whole frame, so filtering costs work proportional to the face's size
+on screen rather than a full-frame convert every frame. (A USB webcam, which
+delivers BGR, still converts the whole frame for filters.) The MediaPipe Face
+Mesh backend needs colour, so on the frames it actually samples (every few
+frames, the same detect cadence) it converts a **downscaled** copy for
+inference; the reshape and re-encode still touch only the face region.
 
 If the renderer can't sample NV12 textures, or raw NV12 capture won't start, the
 app transparently falls back to converting to BGR with libcamera's
@@ -190,6 +230,7 @@ build/open-lego-camera [options]
   --windowed                   run in a window instead of fullscreen
   --no-audio                   record video without sound
   --face-cascade PATH          Haar face-cascade XML for the facial filters
+  --face-landmarker PATH       MediaPipe face_landmarker.task for sharper filters
   --help                       show this help
 ```
 
@@ -207,9 +248,17 @@ then capture.
   and streams animated tears down your cheeks.
 
 Both filters *warp your actual face* — no cartoon mouth or eyes are pasted on
-top; only the crying tears are drawn over the image. Faces are found with a
-stock OpenCV Haar cascade, so no landmark model or `opencv_contrib` build is
-required — keeping it light enough for the Pi Zero 2 W.
+top; only the crying tears are drawn over the image. Out of the box, faces are
+found with a stock OpenCV Haar cascade, so no landmark model or `opencv_contrib`
+build is required — keeping it light enough for the Pi Zero 2 W.
+
+For sharper results, build with the optional **MediaPipe Face Mesh** backend and
+pass `--face-landmarker /opt/mediapipe/models/face_landmarker.task`. The warp
+then tracks the real 468-point mesh — the grin follows your actual mouth (any
+size, any head tilt) and the tears well from your real eyes — instead of the
+cascade's fixed proportions of the face box. See
+[Higher-quality filters with MediaPipe](#higher-quality-filters-with-mediapipe-optional)
+for the one-time setup.
 
 ### Rotating the display
 

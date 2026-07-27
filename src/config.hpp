@@ -22,6 +22,7 @@ struct Config {
     int width = 1280;        // requested preview width
     int height = 720;        // requested preview height
     std::string faceCascade; // override path to the Haar face cascade XML
+    std::string faceLandmarker; // path to the MediaPipe face_landmarker.task bundle
 };
 
 // Parse argv. Returns false and prints usage on --help or a bad flag; sets

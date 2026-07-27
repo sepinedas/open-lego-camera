@@ -10,12 +10,13 @@ namespace olc {
 
 namespace {
 
-// Detection is the expensive part, so it runs on a downscaled grayscale image
-// and only every few frames; between detections the last boxes are reused. On a
+// Detection is the expensive part, so it runs on a downscaled image and only
+// every few frames; between detections the last landmarks are reused. On a
 // hand-held selfie camera the face barely moves frame-to-frame, so this is
 // visually seamless while keeping the Pi Zero comfortable.
 constexpr int kDetectEvery = 3;
-constexpr double kDetectWidth = 320.0; // downscale target for detection
+constexpr double kDetectWidth = 320.0; // downscale target for cascade detection
+constexpr double kMeshWidth = 256.0;   // downscale target for MediaPipe inference
 constexpr double kTearSpeed = 0.019;   // tear cycle progress per frame (fall speed)
 
 // Candidate locations for the stock frontal-face Haar cascade, in the order we
@@ -199,6 +200,24 @@ void FaceFilter::setCascade(const std::string& path) {
     }
 }
 
+bool FaceFilter::setLandmarker(const std::string& modelPath, int maxFaces) {
+    auto mp = MpFaceLandmarker::create(modelPath, maxFaces);
+    if (!mp) return false;
+    mp_ = std::move(mp);
+    return true;
+}
+
+bool FaceFilter::ensureReady() {
+    if (mp_ || loaded_) return true;
+    if (!warned_) {
+        std::cerr << "filters: no face detector available; facial filters "
+                     "disabled. Install `opencv-data` (or pass --face-cascade), "
+                     "or build with MediaPipe and pass --face-landmarker.\n";
+        warned_ = true;
+    }
+    return false;
+}
+
 void FaceFilter::detectLuma(const cv::Mat& luma) {
     // `luma` is already single-channel (a grayscale frame, or an NV12 Y plane),
     // so unlike a BGR frame it needs no colour conversion before detection.
@@ -215,48 +234,67 @@ void FaceFilter::detectLuma(const cv::Mat& luma) {
     int minSide = std::max(24, std::min(small.cols, small.rows) / 6);
     face_.detectMultiScale(small, found, 1.2, 4, 0, cv::Size(minSide, minSide));
 
-    faces_.clear();
+    // Approximate the anchor points from each face box (the cascade gives no
+    // landmarks). Lower fidelity than the mesh, but keeps the filters working.
+    landmarks_.clear();
     double inv = 1.0 / scale;
-    for (const cv::Rect& r : found)
-        faces_.emplace_back((int)std::lround(r.x * inv), (int)std::lround(r.y * inv),
-                            (int)std::lround(r.width * inv),
-                            (int)std::lround(r.height * inv));
+    for (const cv::Rect& r : found) {
+        cv::Rect box((int)std::lround(r.x * inv), (int)std::lround(r.y * inv),
+                     (int)std::lround(r.width * inv),
+                     (int)std::lround(r.height * inv));
+        landmarks_.push_back(landmarksFromBox(box));
+    }
+}
+
+void FaceFilter::detectColor(const cv::Mat& bgr) {
+    if (!mp_ || bgr.empty() || bgr.type() != CV_8UC3) return;
+    // Downscale so MediaPipe's front-end stays cheap on the Pi; the mesh returns
+    // normalised coordinates, which we project back onto the full frame.
+    double scale = kMeshWidth / std::max(1, bgr.cols);
+    if (scale > 1.0) scale = 1.0;
+    cv::Mat small;
+    if (scale < 1.0)
+        cv::resize(bgr, small, cv::Size(), scale, scale, cv::INTER_AREA);
+    else
+        small = bgr;
+
+    std::vector<FaceLandmarks> got;
+    if (mp_->detect(small, videoTs_, (float)bgr.cols, (float)bgr.rows, got))
+        landmarks_.swap(got);
+    videoTs_ += 33; // ~30fps stamp; only needs to strictly increase
 }
 
 void FaceFilter::apply(cv::Mat& frame, Filter filter, double phase) {
     if (filter == Filter::None || frame.empty()) return;
     if (frame.type() != CV_8UC3) return; // filters assume BGR 8-bit
-    if (!loaded_) {
-        if (!warned_) {
-            std::cerr << "filters: no face cascade loaded; facial filters "
-                         "disabled. Install `opencv-data` or pass "
-                         "--face-cascade PATH.\n";
-            warned_ = true;
-        }
-        return;
-    }
+    if (!ensureReady()) return;
 
     if (frameCount_ % kDetectEvery == 0) {
-        cv::Mat gray;
-        cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
-        detectLuma(gray);
+        if (mp_) {
+            detectColor(frame);
+        } else {
+            cv::Mat gray;
+            cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+            detectLuma(gray);
+        }
     }
     ++frameCount_;
 
     applyRegion(frame, {0, 0}, filter, phase);
 }
 
-void FaceFilter::updateDetection(const cv::Mat& luma) {
-    if (!loaded_ || luma.empty()) {
-        if (!loaded_ && !warned_) {
-            std::cerr << "filters: no face cascade loaded; facial filters "
-                         "disabled. Install `opencv-data` or pass "
-                         "--face-cascade PATH.\n";
-            warned_ = true;
+void FaceFilter::updateDetectionNV12(const cv::Mat& nv12, int h) {
+    if (nv12.empty() || h <= 0 || !ensureReady()) return;
+    if (frameCount_ % kDetectEvery == 0) {
+        if (mp_) {
+            // Convert to BGR only on the frames we actually sample.
+            cv::Mat bgr;
+            cv::cvtColor(nv12, bgr, cv::COLOR_YUV2BGR_NV12);
+            detectColor(bgr);
+        } else {
+            detectLuma(nv12.rowRange(0, h)); // Y plane == luma
         }
-        return;
     }
-    if (frameCount_ % kDetectEvery == 0) detectLuma(luma);
     ++frameCount_;
 }
 
@@ -268,7 +306,8 @@ cv::Rect FaceFilter::dirtyRegion(Filter filter, int w, int h) const {
     // cheeks below the eyes. One face -> a tight box; several -> a larger box,
     // still far cheaper than converting the whole frame.
     cv::Rect uni;
-    for (const cv::Rect& f : faces_) {
+    for (const FaceLandmarks& L : landmarks_) {
+        const cv::Rect& f = L.box;
         if (f.width < 40 || f.height < 40) continue;
         int mx = std::max(8, f.width * 2 / 5);
         int mtop = std::max(6, f.height * 3 / 10);
@@ -289,22 +328,32 @@ cv::Rect FaceFilter::dirtyRegion(Filter filter, int w, int h) const {
 void FaceFilter::applyRegion(cv::Mat& roi, cv::Point origin, Filter filter,
                              double phase) {
     if (filter == Filter::None || roi.empty() || roi.type() != CV_8UC3) return;
-    for (const cv::Rect& faceFrame : faces_) {
+    for (const FaceLandmarks& L : landmarks_) {
         // Skip faces too small to reshape cleanly.
-        if (faceFrame.width < 40 || faceFrame.height < 40) continue;
-        // Face rect in roi-local coords. The reshaping helpers clip to roi's
-        // bounds, so a face only partly inside the region is handled safely.
-        cv::Rect face(faceFrame.x - origin.x, faceFrame.y - origin.y,
-                      faceFrame.width, faceFrame.height);
+        if (L.box.width < 40 || L.box.height < 40) continue;
+        // Shift the landmarks into roi-local coords. The reshaping helpers clip
+        // to roi's bounds, so a face only partly inside the region is safe.
+        FaceLandmarks face = L.translated(cv::Point2f(-origin.x, -origin.y));
         if (filter == Filter::BigSmile) applySmile(roi, face);
         else if (filter == Filter::Crying) applyCry(roi, face, phase);
     }
 }
 
-float FaceFilter::mouthOpenness(const cv::Mat& frame, const cv::Rect& f) const {
-    cv::Rect m((int)(f.x + 0.35f * f.width), (int)(f.y + 0.66f * f.height),
-               (int)(0.30f * f.width), (int)(0.16f * f.height));
-    m &= cv::Rect(0, 0, frame.cols, frame.rows);
+// A box centred on the mouth, sized to the real mouth width, in which the
+// openness/teeth heuristics sample. Precise from the mesh, approximate from the
+// cascade box -- either way it tracks the mouth rather than a fixed face slice.
+static cv::Rect mouthPatch(const FaceLandmarks& L, const cv::Mat& frame,
+                           float wScale, float hScale) {
+    float mw = std::max(8.f, L.mouthWidth());
+    int w = std::max(4, (int)(mw * wScale));
+    int h = std::max(4, (int)(mw * hScale));
+    cv::Rect m((int)(L.mouthCenter.x - w * 0.5f),
+               (int)(L.mouthCenter.y - h * 0.5f), w, h);
+    return m & cv::Rect(0, 0, frame.cols, frame.rows);
+}
+
+float FaceFilter::mouthOpenness(const cv::Mat& frame, const FaceLandmarks& L) const {
+    cv::Rect m = mouthPatch(L, frame, 0.85f, 0.45f);
     if (m.area() < 20) return 0.f;
     cv::Mat g;
     cv::cvtColor(frame(m), g, cv::COLOR_BGR2GRAY);
@@ -315,10 +364,8 @@ float FaceFilter::mouthOpenness(const cv::Mat& frame, const cv::Rect& f) const {
     return clamp01((float)(stddev[0] / 55.0));
 }
 
-void FaceFilter::whitenTeeth(cv::Mat& frame, const cv::Rect& f, float open) const {
-    cv::Rect m((int)(f.x + 0.33f * f.width), (int)(f.y + 0.70f * f.height),
-               (int)(0.34f * f.width), (int)(0.14f * f.height));
-    m &= cv::Rect(0, 0, frame.cols, frame.rows);
+void FaceFilter::whitenTeeth(cv::Mat& frame, const FaceLandmarks& L, float open) const {
+    cv::Rect m = mouthPatch(L, frame, 0.90f, 0.40f);
     if (m.area() < 20) return;
 
     float strength = 0.30f + 0.50f * open; // teeth pop more the wider you grin
@@ -337,89 +384,106 @@ void FaceFilter::whitenTeeth(cv::Mat& frame, const cv::Rect& f, float open) cons
     }
 }
 
-void FaceFilter::applySmile(cv::Mat& frame, const cv::Rect& f) {
-    const float fx = f.x, fy = f.y, fw = f.width, fh = f.height;
-    const float mcx = fx + 0.50f * fw, mcy = fy + 0.74f * fh;
-    const float open = mouthOpenness(frame, f);
+void FaceFilter::applySmile(cv::Mat& frame, const FaceLandmarks& L) {
+    const float mw = std::max(8.f, L.mouthWidth());
+    const float open = mouthOpenness(frame, L);
+    const cv::Point2f axis = L.mouthAxis();  // along the mouth (left->right)
+    const cv::Point2f up = L.upAxis();       // toward the cheeks/brow
 
-    const float outX = 0.10f * fw;                 // corners pull outward
-    const float upY = 0.06f * fh;                  // ...and upward
-    const float openY = (0.02f + 0.06f * open) * fh; // vertical mouth stretch
+    // Anchor the grin to the real mouth, scaled by its actual width. With the
+    // precise mesh we know exactly where the mouth is, so push a bigger grin;
+    // the approximate cascade box gets the gentler, safer amount.
+    const float k = L.precise() ? 1.3f : 1.0f;
+    const float outD = 0.28f * mw * k;               // corners slide outward
+    const float upD = 0.18f * mw * k;                // ...and lift up the cheeks
+    const float openD = (0.06f + 0.17f * open) * mw; // vertical mouth stretch
 
     std::vector<cv::Point2f> src, dst;
     std::vector<float> sig;
-    // Left/right mouth corners -> up and out (the grin).
-    src.push_back({fx + 0.32f * fw, mcy});
-    dst.push_back({fx + 0.32f * fw - outX, mcy - upY});
-    sig.push_back(0.16f * fw);
-    src.push_back({fx + 0.68f * fw, mcy});
-    dst.push_back({fx + 0.68f * fw + outX, mcy - upY});
-    sig.push_back(0.16f * fw);
+    // Mouth corners -> up and out along the mouth's own frame (so the grin stays
+    // aligned even when the head is tilted).
+    src.push_back(L.mouthLeft);
+    dst.push_back(L.mouthLeft - outD * axis + upD * up);
+    sig.push_back(0.45f * mw);
+    src.push_back(L.mouthRight);
+    dst.push_back(L.mouthRight + outD * axis + upD * up);
+    sig.push_back(0.45f * mw);
     // Upper lip up / lower lip down -> open the mouth so the teeth show.
-    src.push_back({mcx, mcy - 0.03f * fh});
-    dst.push_back({mcx, mcy - 0.03f * fh - openY});
-    sig.push_back(0.13f * fw);
-    src.push_back({mcx, mcy + 0.03f * fh});
-    dst.push_back({mcx, mcy + 0.03f * fh + openY});
-    sig.push_back(0.13f * fw);
+    src.push_back(L.mouthTop);
+    dst.push_back(L.mouthTop + openD * up);
+    sig.push_back(0.38f * mw);
+    src.push_back(L.mouthBottom);
+    dst.push_back(L.mouthBottom - openD * up);
+    sig.push_back(0.38f * mw);
 
     warpRegion(frame, src, dst, sig);
-    whitenTeeth(frame, f, open);
+    whitenTeeth(frame, L, open);
 }
 
-void FaceFilter::drawTears(cv::Mat& frame, const cv::Rect& f, double phase) const {
-    const float fw = f.width, fh = f.height;
-    const float eyeY = f.y + 0.49f * fh;
-    // Two tear tracks under each eye (inner + outer corner), each shedding a
-    // little stream of droplets. Everything is phase-staggered so it reads as
-    // heavy weeping -- lots of tears -- rather than a curtain of rain.
-    struct Track { float ox, dir, fall, off; };
-    const Track tracks[] = {
-        {f.x + 0.32f * fw, -1.0f, 0.42f * fh, 0.00f}, // left, outer corner
-        {f.x + 0.41f * fw, -0.35f, 0.38f * fh, 0.29f}, // left, inner corner
-        {f.x + 0.59f * fw, +0.35f, 0.38f * fh, 0.61f}, // right, inner corner
-        {f.x + 0.68f * fw, +1.0f, 0.42f * fh, 0.83f}, // right, outer corner
+void FaceFilter::drawTears(cv::Mat& frame, const FaceLandmarks& L, double phase) const {
+    const float fw = std::max(20.f, (float)L.box.width);
+    // Two tear columns under each eye (outer + inner), welling from the real
+    // lower lids and rolling down to the chin. Everything is phase-staggered so
+    // it reads as heavy weeping -- lots of tears -- rather than a curtain of rain.
+    const cv::Point2f inL = L.leftEye - L.leftEyeOuter;   // outer->inner (left)
+    const cv::Point2f inR = L.rightEye - L.rightEyeOuter; // outer->inner (right)
+    struct Col { cv::Point2f o; float dir, off; };
+    const Col cols[] = {
+        {L.leftTear,                -1.00f, 0.00f}, // left, outer corner
+        {L.leftTear + inL * 1.3f,   -0.35f, 0.29f}, // left, inner corner
+        {L.rightTear + inR * 1.3f,  +0.35f, 0.61f}, // right, inner corner
+        {L.rightTear,               +1.00f, 0.83f}, // right, outer corner
     };
-    // Several droplets per track, spread across the cycle so a tear is welling,
+    // Several droplets per column, spread across the cycle so a tear is welling,
     // rolling and drying on each cheek at once.
     const float dropOff[] = {0.0f, 0.34f, 0.67f};
-    for (const Track& t : tracks) {
+    for (const Col& c : cols) {
+        // Fall from the lid down to (roughly) the jaw of this particular face.
+        float fall = std::max(30.f, L.chin.y - c.o.y);
         for (float d : dropOff) {
-            float p = (float)std::fmod(phase * kTearSpeed + t.off + d, 1.0);
-            drawTear(frame, t.ox, eyeY, t.fall, fw, t.dir, p);
+            float p = (float)std::fmod(phase * kTearSpeed + c.off + d, 1.0);
+            drawTear(frame, c.o.x, c.o.y, fall, fw, c.dir, p);
         }
     }
 }
 
-void FaceFilter::applyCry(cv::Mat& frame, const cv::Rect& f, double phase) {
-    const float fx = f.x, fy = f.y, fw = f.width, fh = f.height;
-    const float mcx = fx + 0.50f * fw, mcy = fy + 0.74f * fh;
+void FaceFilter::applyCry(cv::Mat& frame, const FaceLandmarks& L, double phase) {
+    const float mw = std::max(8.f, L.mouthWidth());
+    const float fh = std::max(8.f, (float)L.box.height);
+    const float fw = std::max(8.f, (float)L.box.width);
+    const cv::Point2f axis = L.mouthAxis();
+    const cv::Point2f up = L.upAxis();
+    const cv::Point2f down = -up;
 
-    const float downY = 0.06f * fh; // corners sink
-    const float inX = 0.03f * fw;   // ...and draw slightly inward
+    const float k = L.precise() ? 1.15f : 1.0f;
+    const float downD = 0.06f * fh * k; // corners sink toward the chin
+    const float inD = 0.10f * mw;       // ...and draw slightly inward
+    const float upC = 0.04f * fh;       // philtrum lifts -> deepens the frown
+    const float browDownD = 0.06f * fh * k; // inner brows sink
+    const float browInD = 0.10f * mw * k;   // ...and pinch together
 
     std::vector<cv::Point2f> src, dst;
     std::vector<float> sig;
-    // Mouth corners down + centre up -> a sad frown (inverse of the smile).
-    src.push_back({fx + 0.34f * fw, mcy});
-    dst.push_back({fx + 0.34f * fw + inX, mcy + downY});
-    sig.push_back(0.15f * fw);
-    src.push_back({fx + 0.66f * fw, mcy});
-    dst.push_back({fx + 0.66f * fw - inX, mcy + downY});
-    sig.push_back(0.15f * fw);
-    src.push_back({mcx, mcy - 0.01f * fh});
-    dst.push_back({mcx, mcy - 0.05f * fh});
-    sig.push_back(0.13f * fw);
+    // Mouth corners down + inward, centre up -> a sad frown (inverse of the grin).
+    src.push_back(L.mouthLeft);
+    dst.push_back(L.mouthLeft + inD * axis + downD * down);
+    sig.push_back(0.42f * mw);
+    src.push_back(L.mouthRight);
+    dst.push_back(L.mouthRight - inD * axis + downD * down);
+    sig.push_back(0.42f * mw);
+    src.push_back(L.mouthCenter);
+    dst.push_back(L.mouthCenter + upC * up);
+    sig.push_back(0.36f * mw);
     // Inner brows down and together -> the pinched, crumpled crying brow.
-    src.push_back({fx + 0.40f * fw, fy + 0.36f * fh});
-    dst.push_back({fx + 0.43f * fw, fy + 0.42f * fh});
+    src.push_back(L.browLeftInner);
+    dst.push_back(L.browLeftInner + browInD * axis + browDownD * down);
     sig.push_back(0.12f * fw);
-    src.push_back({fx + 0.60f * fw, fy + 0.36f * fh});
-    dst.push_back({fx + 0.57f * fw, fy + 0.42f * fh});
+    src.push_back(L.browRightInner);
+    dst.push_back(L.browRightInner - browInD * axis + browDownD * down);
     sig.push_back(0.12f * fw);
 
     warpRegion(frame, src, dst, sig);
-    drawTears(frame, f, phase);
+    drawTears(frame, L, phase);
 }
 
 Filter nextFilter(Filter f) {

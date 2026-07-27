@@ -392,9 +392,19 @@ bool App::init(const Config& cfg) {
 
     gallery_ = std::make_unique<Gallery>(cfg_.outputDir);
     if (!cfg_.faceCascade.empty()) faceFilter_.setCascade(cfg_.faceCascade);
+    // Prefer the precise MediaPipe Face Mesh when a model is supplied; the Haar
+    // cascade stays loaded as the fallback if the mesh can't be brought up.
+    if (!cfg_.faceLandmarker.empty()) {
+        if (faceFilter_.setLandmarker(cfg_.faceLandmarker))
+            std::cout << "filters: using MediaPipe Face Mesh for facial filters\n";
+        else
+            std::cerr << "filters: MediaPipe landmarker unavailable; falling back "
+                         "to the Haar cascade\n";
+    }
     if (!faceFilter_.ready())
-        std::cerr << "filters: no face cascade found; facial filters disabled "
-                     "(install `opencv-data` or pass --face-cascade)\n";
+        std::cerr << "filters: no face detector found; facial filters disabled "
+                     "(install `opencv-data`, pass --face-cascade, or build with "
+                     "MediaPipe and pass --face-landmarker)\n";
     refreshThumbnail();
     menu_.wake();
     return true;
@@ -960,7 +970,7 @@ void App::renderCamera() {
 // forces a full-frame CPU convert every frame.
 void App::renderFilteredNV12() {
     const int W = cam_->width(), H = cam_->height();
-    faceFilter_.updateDetection(lastNative_.rowRange(0, H)); // Y plane == luma
+    faceFilter_.updateDetectionNV12(lastNative_, H); // Y plane == luma; colour when meshing
     cv::Rect region = faceFilter_.dirtyRegion(filter_, W, H);
 
     clear();
