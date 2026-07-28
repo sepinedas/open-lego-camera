@@ -20,8 +20,13 @@ set(MEDIAPIPE_ROOT "" CACHE PATH "Root of the MediaPipe aarch64 payload (include
 # --- Dependencies -----------------------------------------------------------
 # SDL2 draws to HDMI via the KMSDRM driver on a headless Pi (no X11 needed).
 find_package(SDL2 REQUIRED)
-# OpenCV handles V4L2/GStreamer capture and JPEG I/O.
-find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs videoio)
+# OpenCV handles V4L2/GStreamer capture and JPEG I/O. The extra modules
+# (calib3d/features2d/highgui/video) aren't used directly here, but
+# libmediapipe_tasks.so links them, so requesting them puts the matching
+# .so.406 libraries on the link line and avoids "not found (try -rpath-link)"
+# warnings when linking the executable.
+find_package(OpenCV REQUIRED COMPONENTS
+  core imgproc imgcodecs videoio calib3d features2d highgui video)
 
 # SDL2_gfx (icon primitives) has no CMake config on most distros -> pkg-config.
 find_package(PkgConfig REQUIRED)
