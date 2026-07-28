@@ -952,7 +952,7 @@ void App::renderGallery() {
             int r = std::max(30, viewH_ / 10);
             filledCircleRGBA(ren_, viewW_ / 2, viewH_ / 2, r, 0, 0, 0, 90);
             drawIcon(ren_, Action::Play, viewW_ / 2, viewH_ / 2,
-                     (int)(r * 0.62), 220, false);
+                     (int)(r * 0.62), 220);
         }
     }
 
