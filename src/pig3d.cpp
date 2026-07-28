@@ -21,12 +21,6 @@ float clampf(float v, float lo, float hi) {
     return v < lo ? lo : (v > hi ? hi : v);
 }
 
-// Smooth 0..1 ramp between edges e0 and e1 (Hermite), for the ear's fold.
-float smoothstep(float e0, float e1, float x) {
-    float t = clampf((x - e0) / (e1 - e0), 0.f, 1.f);
-    return t * t * (3.f - 2.f * t);
-}
-
 Vec3f norm(const Vec3f& v) {
     float n = std::sqrt(v.dot(v));
     return n > 1e-8f ? v * (1.f / n) : v;
@@ -180,75 +174,70 @@ Mesh buildNostrils() {
     return m;
 }
 
-// One ear: a broad, folded "lop" ear like a domestic pig's. Its base sits high
-// on the top-side of the head (clear of the eyes); the flap rises only slightly,
-// then FOLDS forward and hangs down so the tip points down-and-forward toward the
-// temple, lateral to the eye. Built by sweeping a tapering width profile along a
-// curved centreline whose direction bends from up-out to down-forward at the
-// fold. Double-sided; the inner hollow shows a deeper pink near the base.
+// One ear: a broad, floppy pig ear that attaches along the crown and drapes
+// OUTWARD and DOWN to a soft tip out by the outer eye, tilted forward so its
+// front shows -- exactly a domestic pig's folded ear, not an upright horn.
+//
+// Built from three corners so it stays a clean flap (no self-folding crease):
+//   A = inner-top attachment (near the crown, just inside the eye line)
+//   B = outer-top attachment (crown, further out)
+//   C = the drooping tip, out to the side and down near eye level
+// The surface is the triangle A-B-C: each row t interpolates from the top edge
+// (A..B) toward the tip C, so it is wide along the crown and narrows to the tip.
+// A gentle mid-surface bulge plus a slight forward curl of the tip give it body,
+// and the lower-inner region is tinted a deeper pink for the ear's hollow.
 Mesh buildEar(float side, float wiggle) {
     Mesh m;
     m.doubleSided = true;
-    m.ambient = 0.36f;
-    m.spec = 0.13f;
+    m.ambient = 0.38f;
+    m.spec = 0.12f;
     m.shin = 12.f;
-    const Vec3f pink(170, 150, 238);
-    const Vec3f inner(120, 95, 200);
+    const Vec3f pink(172, 152, 239);
+    const Vec3f inner(122, 98, 202);
 
-    // Base high and outboard on the head (model eyes are at (+-0.5, -0.35)).
-    const Vec3f baseC(side * 0.72f, -0.80f, 0.03f);
-    // The centreline bends from "up and out" at the root to "down and forward"
-    // past the fold. Keeping a strong forward component (rather than folding
-    // straight down) gives a clean forward lop, not a crumpled crease.
-    const Vec3f rootDir = norm(Vec3f(side * 0.48f, -0.46f, -0.26f));
-    const Vec3f tipDir = norm(Vec3f(side * 0.14f, 0.60f, -0.64f));
-    const float earLen = 1.12f, curv = 0.12f;
+    // Corners (model eyes are at (+-0.5, -0.35); +y is down, -z toward camera).
+    // A wide, roughly horizontal top edge (A..B) along the crown, dropping to a
+    // soft tip C low on the outer side -> a big triangular flap draped over the
+    // side of the head, clear of the (more medial) eye.
+    const Vec3f A(side * 0.38f, -0.90f, -0.10f); // inner-top, near the crown
+    const Vec3f B(side * 1.22f, -0.82f, -0.02f); // outer-top attachment (wide)
+    const Vec3f C(side * 1.02f, 0.04f, -0.32f);  // drooping outer-lower tip
+    Vec3f Nrm = norm((B - A).cross(C - A));       // flap plane normal
+    if (Nrm[2] > 0.f) Nrm = -Nrm;                 // face the camera
+    const float bulge = 0.17f, tipCurl = 0.16f;
 
-    const int nS = 13, nT = 12;
-    // Sweep the folded centreline, carrying a local (width, normal) frame.
-    std::vector<Vec3f> cline(nT), Wd(nT), Nd(nT);
-    Vec3f c = baseC;
+    const int nA = 11, nT = 12;
+    std::vector<std::vector<int>> g(nT, std::vector<int>(nA));
     for (int ti = 0; ti < nT; ++ti) {
-        float t = (float)ti / (nT - 1);
-        float f = smoothstep(0.14f, 0.55f, t); // the fold
-        Vec3f dir = norm(rootDir * (1.f - f) + tipDir * f);
-        if (ti > 0) c += dir * (earLen / (nT - 1));
-        cline[ti] = c;
-        Vec3f W = norm(Vec3f(0.f, 0.f, -1.f).cross(dir)); // horizontal across ear
-        if (W[0] * side < 0.f) W = -W;                    // outward-positive
-        Vec3f N = norm(dir.cross(W));
-        if (N[2] > 0.f) N = -N; // front toward the camera
-        Wd[ti] = W;
-        Nd[ti] = N;
-    }
-
-    std::vector<std::vector<int>> g(nT, std::vector<int>(nS));
-    for (int ti = 0; ti < nT; ++ti) {
-        float t = (float)ti / (nT - 1);
-        float halfW = 0.52f * (1.f - 0.42f * t); // broad base tapering to the tip
-        if (t < 0.1f) halfW *= 0.8f + 0.2f * (t / 0.1f); // round the base corners
-        for (int si = 0; si < nS; ++si) {
-            float s = 2.f * si / (nS - 1) - 1.f; // -1..1 across width
-            Vec3f p = cline[ti] + Wd[ti] * (s * halfW);
-            float cup = curv * (1.f - s * s);
-            p += Nd[ti] * cup;
-            // The inner hollow only peeks out near the base, where the fold opens.
-            float inF = clampf((1.f - std::fabs(s)) * 1.1f - 0.2f, 0.f, 1.f) *
-                        clampf(1.5f * (0.45f - t), 0.f, 1.f);
+        float t = (float)ti / (nT - 1); // 0 at the crown edge, 1 at the tip
+        for (int ai = 0; ai < nA; ++ai) {
+            float a = (float)ai / (nA - 1); // 0 at A (inner), 1 at B (outer)
+            Vec3f top = A + (B - A) * a;
+            Vec3f p = top + (C - top) * t; // blend the crown edge toward the tip
+            // Soft body: bulge the middle of the flap toward the camera, easing
+            // out at the edges and toward the tip.
+            float edge = std::sin(kPi * a);
+            p += Nrm * (bulge * edge * (1.f - 0.5f * t));
+            // Floppy forward curl of the drooping tip.
+            p += Nrm * (tipCurl * t * t);
+            // Deeper-pink inner hollow over the lower-central part of the ear.
+            float inF = clampf((t - 0.30f) * 1.4f, 0.f, 1.f) *
+                        clampf(1.f - std::fabs(a - 0.5f) * 1.7f, 0.f, 1.f);
             Vec3f col = pink * (1.f - inF) + inner * inF;
-            g[ti][si] = m.add(p, col);
+            g[ti][ai] = m.add(p, col);
         }
     }
     for (int ti = 0; ti + 1 < nT; ++ti)
-        for (int si = 0; si + 1 < nS; ++si) {
-            m.face(g[ti][si], g[ti][si + 1], g[ti + 1][si + 1]);
-            m.face(g[ti][si], g[ti + 1][si + 1], g[ti + 1][si]);
+        for (int ai = 0; ai + 1 < nA; ++ai) {
+            m.face(g[ti][ai], g[ti][ai + 1], g[ti + 1][ai + 1]);
+            m.face(g[ti][ai], g[ti + 1][ai + 1], g[ti + 1][ai]);
         }
 
-    // Idle wiggle: rock the whole ear about its base in the image plane.
+    // Idle wiggle: rock the whole ear about its attachment in the image plane.
     if (wiggle != 0.f) {
         Matx33f Rw = rotZ(side * wiggle);
-        for (auto& p : m.pos) p = rotAbout(Rw, p, baseC);
+        Vec3f pivot = (A + B) * 0.5f;
+        for (auto& p : m.pos) p = rotAbout(Rw, p, pivot);
     }
     m.computeNormals();
     return m;
