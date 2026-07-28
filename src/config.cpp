@@ -55,6 +55,8 @@ static void printUsage(const char* prog) {
         "  --size WxH                   requested preview size (default: 1280x720)\n"
         "  --rotate 0|90|180|270        rotate the whole UI (preview + buttons)\n"
         "                               to match a rotated panel\n"
+        "  --camera-rotate 0|90|180|270 rotate only the camera image (preview and\n"
+        "                               captures), leaving the buttons in place\n"
         "  --touch-rotate 0|90|180|270  extra touch rotation if the touch panel\n"
         "                               is misaligned from the display\n"
         "                               (e.g. Pimoroni HyperPixel)\n"
@@ -120,6 +122,14 @@ bool parseArgs(int argc, char** argv, Config& out, int* exitCode) {
             if (out.rotate != 0 && out.rotate != 90 &&
                 out.rotate != 180 && out.rotate != 270) {
                 std::cerr << "bad --rotate (0|90|180|270): " << v << "\n";
+                *exitCode = 2; return false;
+            }
+        } else if (a == "--camera-rotate") {
+            const char* v = need(i); if (!v) return false;
+            out.cameraRotate = std::atoi(v);
+            if (out.cameraRotate != 0 && out.cameraRotate != 90 &&
+                out.cameraRotate != 180 && out.cameraRotate != 270) {
+                std::cerr << "bad --camera-rotate (0|90|180|270): " << v << "\n";
                 *exitCode = 2; return false;
             }
         } else if (a == "--touch-rotate") {

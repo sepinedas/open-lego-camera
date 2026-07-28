@@ -34,13 +34,15 @@ public:
 private:
     // --- display helpers ---
     bool initDisplay();
-    void renderMat(const cv::Mat& mat); // letterboxed blit of a BGR frame
+    // Letterboxed blit of a BGR frame, optionally rotated clockwise (0/90/180/270).
+    void renderMat(const cv::Mat& mat, int rotate = 0);
     // Upload a camera frame (native NV12 or BGR) and blit it letterboxed into
     // the view. `src` (in image pixels) selects the region to show, so digital
     // zoom is a GPU crop-and-scale; null shows the whole image. For NV12 the
-    // GPU performs the YUV->RGB conversion.
+    // GPU performs the YUV->RGB conversion. `rotate` (0/90/180/270 clockwise)
+    // spins just the image on the GPU, independent of the whole-UI rotation.
     void blitCamera(const cv::Mat& frame, PixelFormat fmt, int imgW, int imgH,
-                    const SDL_Rect* src);
+                    const SDL_Rect* src, int rotate = 0);
     void beginFrame();                  // target the offscreen (logical) canvas
     void present();                     // blit the canvas to the panel, rotated
     void clear();

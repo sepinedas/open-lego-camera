@@ -184,6 +184,7 @@ build/open-lego-camera [options]
   --webcam-index N             force /dev/videoN for a USB webcam
   --size WxH                   requested preview size (default: 1280x720)
   --rotate 0|90|180|270        rotate the whole UI to match a rotated panel
+  --camera-rotate 0|90|180|270 rotate only the camera image (preview + captures)
   --touch-rotate 0|90|180|270  extra touch rotation if touch is misaligned
   --touch-flip-x / --touch-flip-y   mirror touch on an axis
   --driver NAME                force SDL video driver (kmsdrm, fbcon, x11)
@@ -227,6 +228,20 @@ with the display you usually need nothing else. `--touch-rotate` /
 `--touch-flip-x` / `--touch-flip-y` are a *separate* correction for when the
 touch controller is mounted rotated/mirrored **relative to the panel** (common
 on the HyperPixel) — reach for them only if taps are still off after `--rotate`.
+
+`--camera-rotate 90|180|270` rotates **only the camera image** — the live
+preview *and* the photos/videos you capture — while leaving the icon buttons and
+the rest of the UI exactly where they are. Reach for it when the panel is
+mounted the right way up but the camera module itself sits sideways, so the
+picture comes in rotated but the controls don't need to move:
+
+```sh
+build/open-lego-camera --camera-rotate 90
+```
+
+The image spins on the GPU for the preview (no extra CPU cost) and is baked into
+captures so a saved photo matches what you saw. It stacks with `--rotate`, which
+still turns the whole UI on top.
 
 - Captures are saved as `IMG_YYYYMMDD_HHMMSS.jpg` and
   `VID_YYYYMMDD_HHMMSS.mp4`.

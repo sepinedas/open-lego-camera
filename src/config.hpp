@@ -16,6 +16,7 @@ struct Config {
     int webcamIndex = -1;    // force a specific /dev/videoN (-1 = probe)
     std::string picamName;   // libcamera camera-name to select when several exist
     int rotate = 0;          // rotate the whole UI 0/90/180/270 (clockwise)
+    int cameraRotate = 0;    // rotate only the camera image 0/90/180/270 (clockwise)
     int touchRotate = 0;     // rotate touch coords 0/90/180/270 to match the panel
     bool touchFlipX = false; // mirror touch horizontally
     bool touchFlipY = false; // mirror touch vertically

@@ -19,6 +19,18 @@
 
 namespace olc {
 
+// Rotate a BGR frame clockwise by `deg` (0/90/180/270). Returns a rotated copy;
+// for 0 (or any non-multiple) it returns the input unchanged. Used to bake the
+// camera-image rotation into stills and recordings so they match the preview.
+static cv::Mat rotatedBGR(const cv::Mat& in, int deg) {
+    switch (((deg % 360) + 360) % 360) {
+        case 90:  { cv::Mat o; cv::rotate(in, o, cv::ROTATE_90_CLOCKWISE); return o; }
+        case 180: { cv::Mat o; cv::rotate(in, o, cv::ROTATE_180); return o; }
+        case 270: { cv::Mat o; cv::rotate(in, o, cv::ROTATE_90_COUNTERCLOCKWISE); return o; }
+        default:  return in;
+    }
+}
+
 App::~App() {
     if (recorder_.recording()) recorder_.stop();
     if (tex_) SDL_DestroyTexture(tex_);
@@ -311,7 +323,7 @@ static std::string captureTime(const std::string& path) {
 // Blit a BGR cv::Mat to the screen, preserving aspect ratio (letterboxed).
 // Used for decoded gallery/playback frames; the live preview goes through
 // blitCamera so it can keep NV12 and zoom on the GPU.
-void App::renderMat(const cv::Mat& src) {
+void App::renderMat(const cv::Mat& src, int rotate) {
     clear();
     if (src.empty()) return;
 
@@ -321,7 +333,7 @@ void App::renderMat(const cv::Mat& src) {
     else if (src.channels() == 1) cv::cvtColor(src, bgr, cv::COLOR_GRAY2BGR);
     else bgr = src;
 
-    blitCamera(bgr, PixelFormat::BGR, bgr.cols, bgr.rows, nullptr);
+    blitCamera(bgr, PixelFormat::BGR, bgr.cols, bgr.rows, nullptr, rotate);
 }
 
 // Upload a camera frame and blit it letterboxed. For NV12 we hand SDL the raw
@@ -329,7 +341,7 @@ void App::renderMat(const cv::Mat& src) {
 // the YUV->RGB conversion. `src`, when given, is the region to display -- the
 // GPU scales it to fill, which is how pinch-zoom stays free of a CPU resize.
 void App::blitCamera(const cv::Mat& frame, PixelFormat fmt, int imgW, int imgH,
-                     const SDL_Rect* src) {
+                     const SDL_Rect* src, int rotate) {
     if (frame.empty() || imgW <= 0 || imgH <= 0) return;
 
     // Fall back to a CPU convert if the renderer can't sample NV12 textures.
@@ -367,11 +379,22 @@ void App::blitCamera(const cv::Mat& frame, PixelFormat fmt, int imgW, int imgH,
 
     // Letterbox the (full) image into the logical view, then let the GPU crop
     // to `src` when zooming -- the destination stays put so the framing is
-    // stable as you zoom.
-    double s = std::min((double)viewW_ / imgW, (double)viewH_ / imgH);
+    // stable as you zoom. When the camera image is rotated 90/270 its bounding
+    // box swaps width/height, so fit against the swapped dimensions and let the
+    // GPU spin the frame about its centre (SDL_RenderCopyEx).
+    int rot = ((rotate % 360) + 360) % 360;
+    bool swap = (rot == 90 || rot == 270);
+    double s = swap ? std::min((double)viewW_ / imgH, (double)viewH_ / imgW)
+                    : std::min((double)viewW_ / imgW, (double)viewH_ / imgH);
     int dw = (int)(imgW * s), dh = (int)(imgH * s);
     SDL_Rect dst{(viewW_ - dw) / 2, (viewH_ - dh) / 2, dw, dh};
-    SDL_RenderCopy(ren_, tex_, src, &dst);
+    if (rot == 0) {
+        SDL_RenderCopy(ren_, tex_, src, &dst);
+    } else {
+        SDL_Point center{dw / 2, dh / 2};
+        SDL_RenderCopyEx(ren_, tex_, src, &dst, (double)rot, &center,
+                         SDL_FLIP_NONE);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -634,6 +657,7 @@ void App::capturePhoto() {
     if (shot.empty()) return;
     faceFilter_.apply(shot, filter_, filterPhase_);
     cam_->cropZoom(shot);
+    shot = rotatedBGR(shot, cfg_.cameraRotate); // match the rotated preview
     std::string path = timestampName("IMG", ".jpg");
     bool ok = false;
     try {
@@ -658,8 +682,11 @@ void App::toggleRecording() {
     } else if (!lastNative_.empty()) {
         ensureDir(cfg_.outputDir); // same guard as photos: writer needs the dir
         std::string path = timestampName("VID", ".mp4");
-        // Recorded frames are the full-size zoomed BGR the camera hands back.
+        // Recorded frames are the full-size zoomed BGR the camera hands back,
+        // rotated to match the preview -- so 90/270 swaps the writer's geometry.
         cv::Size sz(cam_->width(), cam_->height());
+        if (cfg_.cameraRotate == 90 || cfg_.cameraRotate == 270)
+            std::swap(sz.width, sz.height);
         if (recorder_.start(path, sz, cam_->fps(), cfg_.audio))
             std::cout << "recording -> " << path << "\n";
     }
@@ -862,8 +889,9 @@ void App::renderCamera() {
         cv::Mat bgr = cam_->nativeToBGR(lastNative_);
         faceFilter_.apply(bgr, filter_, filterPhase_);
         cam_->cropZoom(bgr);
-        if (recording) recorder_.writeFrame(bgr);
-        renderMat(bgr);
+        // Recordings bake in the camera rotation so the file matches the preview.
+        if (recording) recorder_.writeFrame(rotatedBGR(bgr, cfg_.cameraRotate));
+        renderMat(bgr, cfg_.cameraRotate);
     } else if (nv12FilterPath) {
         renderFilteredNV12();
     } else if (!lastNative_.empty()) {
@@ -872,7 +900,7 @@ void App::renderCamera() {
         cv::Rect zr = cam_->zoomSrcRect(cam_->width(), cam_->height());
         SDL_Rect z{zr.x, zr.y, zr.width, zr.height};
         blitCamera(lastNative_, cam_->format(), cam_->width(), cam_->height(),
-                   cam_->zoomed() ? &z : nullptr);
+                   cam_->zoomed() ? &z : nullptr, cfg_.cameraRotate);
     } else {
         clear();
     }
@@ -970,7 +998,7 @@ void App::renderFilteredNV12() {
 
     if (region.area() == 0) {
         // No face in view: nothing to reshape, so stay on the pure fast path.
-        blitCamera(lastNative_, PixelFormat::NV12, W, H, zp);
+        blitCamera(lastNative_, PixelFormat::NV12, W, H, zp, cfg_.cameraRotate);
         return;
     }
 
@@ -980,7 +1008,7 @@ void App::renderFilteredNV12() {
     cv::Mat roi = Camera::nv12CropToBGR(filteredNative_, region);
     faceFilter_.applyRegion(roi, region.tl(), filter_, filterPhase_);
     Camera::bgrIntoNV12(roi, filteredNative_, region.tl());
-    blitCamera(filteredNative_, PixelFormat::NV12, W, H, zp);
+    blitCamera(filteredNative_, PixelFormat::NV12, W, H, zp, cfg_.cameraRotate);
 }
 
 void App::ensureGalleryImage() {

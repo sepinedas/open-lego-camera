@@ -24,9 +24,9 @@ std::vector<Button> row(const std::vector<Action>& actions, int sw, int sh) {
     // row (pitch = 2r + gap, gap = r  ->  total width = r*(3n-1)) fits across the
     // width with a small margin. This keeps all buttons on-screen in both
     // landscape and rotated (portrait) layouts.
-    int r = std::max(24, std::min(sw, sh) / 14);
+    int r = std::max(28, std::min(sw, sh) / 12);
     int rFit = (int)(0.96 * sw / (3 * n - 1));
-    r = std::max(16, std::min(r, rFit));
+    r = std::max(18, std::min(r, rFit));
 
     int gap = r;
     int pitch = 2 * r + gap;
