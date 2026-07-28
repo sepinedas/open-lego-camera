@@ -18,19 +18,20 @@ namespace olc {
 // mouth and brows pulled into a frown, the only thing drawn on top being the
 // crying tears.
 //
-// The "pig face" filter instead draws smooth, 3D-shaded pig ears, snout and
-// cheeks over the frame. To keep those graphics glued to the face as the head
-// tilts and turns, it anchors them to a small set of landmarks derived from the
-// two eyes (a stock eye Haar cascade) plus the face box: the eye line gives the
-// in-plane roll and scale, and where the eyes sit inside the face box gives a
-// rough left/right turn (yaw). All the pig features are placed in one face-local
-// coordinate frame built from those landmarks, so the effect follows the head
-// rather than being pinned to an upright box.
+// The "pig face" filter instead overlays real 3D models -- mesh ears and a
+// protruding snout with nostrils -- rendered by `pig3d` through a perspective
+// camera. To make them share the face's orientation and perspective, the head
+// pose (roll/yaw/pitch) is estimated from a small set of landmarks: the two eyes
+// (a stock eye Haar cascade) give the eye line -> roll and scale, and where the
+// eyes sit inside the face box gives a rough turn (yaw) and nod (pitch). The
+// meshes are then oriented by that pose, so the snout foreshortens and the ears
+// swing around the head instead of sitting on top like stickers.
 //
-// Faces (and eyes) are found with stock OpenCV Haar cascades (objdetect); no
-// landmark-regression model or contrib module is needed, which keeps it light
-// enough for a Pi Zero. When no eye cascade is available the pig features fall
-// back to the face box alone (upright, no roll/yaw tracking).
+// Faces (and eyes) are found with stock OpenCV Haar cascades (objdetect) and the
+// 3D rendering is a self-contained software rasteriser; no landmark-regression
+// model, contrib module or GPU is needed, which keeps it light enough for a Pi
+// Zero. When no eye cascade is available the pig falls back to the face box
+// alone (front-facing, upright).
 class FaceFilter {
 public:
     // Loads the frontal-face cascade from the usual system locations.

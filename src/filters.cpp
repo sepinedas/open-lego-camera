@@ -6,6 +6,8 @@
 
 #include <opencv2/imgproc.hpp>
 
+#include "pig3d.hpp"
+
 namespace olc {
 
 namespace {
@@ -184,79 +186,6 @@ void warpRegion(cv::Mat& img, const std::vector<cv::Point2f>& src,
     cv::Mat warped;
     cv::remap(img, warped, mapx, mapy, cv::INTER_LINEAR, cv::BORDER_REPLICATE);
     warped.copyTo(img(roi));
-}
-
-// --- 3D graphics for the pig-face filter -----------------------------------
-
-// Render a smoothly-shaded 3D "bulge": an ellipse drawn as if it were a lit
-// hemisphere, so it reads as a rounded, glossy plastic-toy piece rather than a
-// flat sticker. This is what gives the pig's ears, snout and cheeks their depth.
-//
-// The ellipse has half-axes (rx, ry) and is rotated by `rot`; local x runs
-// along rx, local y along ry. For every covered pixel we reconstruct a
-// hemisphere normal n = (lx, ly, sqrt(1 - lx^2 - ly^2)) and light it with a
-// directional light `L` (Lambertian diffuse + a tight specular hot-spot), so the
-// surface is bright where it faces the light and falls into shadow at the rim.
-// The edge is anti-aliased over ~1px and the whole thing is alpha-blended, so
-// overlapping pieces (snout over cheeks, inner ear over ear) composite cleanly.
-//
-// Only the ellipse's bounding box is touched, so cost scales with feature size.
-void drawBulge(cv::Mat& img, cv::Point2f c, float rx, float ry, float rot,
-               cv::Scalar base, cv::Vec3f L, float ambient, float spec,
-               float alpha) {
-    rx = std::max(1.f, rx);
-    ry = std::max(1.f, ry);
-    const float ca = std::cos(rot), sa = std::sin(rot);
-    const float rmax = std::max(rx, ry);
-    cv::Rect rc((int)std::floor(c.x - rmax) - 1, (int)std::floor(c.y - rmax) - 1,
-                (int)std::ceil(2.f * rmax) + 3, (int)std::ceil(2.f * rmax) + 3);
-    rc &= cv::Rect(0, 0, img.cols, img.rows);
-    if (rc.area() <= 0) return;
-
-    float ll = std::sqrt(L[0] * L[0] + L[1] * L[1] + L[2] * L[2]);
-    if (ll < 1e-6f) ll = 1.f;
-    L *= 1.f / ll;
-    // Anti-alias band width in normalised (unit-disc) coordinates ~= 1 pixel.
-    const float aa = std::min(0.6f, 1.5f / rmax);
-
-    for (int yy = 0; yy < rc.height; ++yy) {
-        cv::Vec3b* row = img.ptr<cv::Vec3b>(rc.y + yy);
-        const float py = (float)(rc.y + yy) - c.y;
-        for (int xx = 0; xx < rc.width; ++xx) {
-            const float px = (float)(rc.x + xx) - c.x;
-            // Into the ellipse's own frame, normalised so the rim is at r == 1.
-            const float lx = (px * ca + py * sa) / rx;
-            const float ly = (-px * sa + py * ca) / ry;
-            const float d2 = lx * lx + ly * ly;
-            if (d2 > 1.f) continue;
-
-            const float z = std::sqrt(std::max(0.f, 1.f - d2));
-            // Hemisphere normal (normalised; lx,ly already unit-disc coords).
-            cv::Vec3f n(lx, ly, z);
-            const float nl = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
-            if (nl > 1e-6f) n *= 1.f / nl;
-
-            float diff = n.dot(L);
-            if (diff < 0.f) diff = 0.f;
-            const float shade = ambient + (1.f - ambient) * diff;
-            // Tight specular hot-spot for the glossy look.
-            const float sp = spec > 0.f ? spec * std::pow(diff, 22.f) : 0.f;
-
-            // Edge coverage: fade the last ~1px so the silhouette is smooth.
-            const float d = std::sqrt(d2);
-            float cov = 1.f;
-            if (d > 1.f - aa) cov = (1.f - d) / aa;
-            if (cov <= 0.f) continue;
-            const float a = alpha * cov;
-
-            cv::Vec3b& o = row[rc.x + xx];
-            for (int k = 0; k < 3; ++k) {
-                float col = (float)base[k] * shade + 255.f * sp;
-                if (col > 255.f) col = 255.f;
-                o[k] = cv::saturate_cast<uchar>(col * a + (float)o[k] * (1.f - a));
-            }
-        }
-    }
 }
 
 } // namespace
@@ -462,8 +391,8 @@ cv::Rect FaceFilter::dirtyRegion(Filter filter, int w, int h) const {
     cv::Rect uni;
     for (const cv::Rect& f : faces_) {
         if (f.width < 40 || f.height < 40) continue;
-        int mx = pig ? std::max(10, f.width * 7 / 10) : std::max(8, f.width * 2 / 5);
-        int mtop = pig ? std::max(10, f.height * 4 / 5) : std::max(6, f.height * 3 / 10);
+        int mx = pig ? std::max(10, f.width * 9 / 10) : std::max(8, f.width * 2 / 5);
+        int mtop = pig ? std::max(10, f.height) : std::max(6, f.height * 3 / 10);
         int mbot = pig ? std::max(10, f.height * 2 / 5) : std::max(8, f.height / 2);
         cv::Rect r(f.x - mx, f.y - mtop, f.width + 2 * mx, f.height + mtop + mbot);
         uni = (uni.area() == 0) ? r : (uni | r);
@@ -629,110 +558,15 @@ void FaceFilter::applyCry(cv::Mat& frame, const cv::Rect& f, double phase) {
 
 void FaceFilter::applyPig(cv::Mat& frame, const cv::Rect& f, const FaceEyes& eyes,
                           double phase) const {
-    // Build one face-local coordinate frame from the landmarks, then place every
-    // pig feature in it. This is what makes the effect angle-independent: rather
-    // than pinning graphics to an upright box, ears/snout/cheeks are positioned
-    // and rotated by the same frame, so they roll, scale and shift with the head.
-    //
-    //   R  = unit vector along the eye line (image-left eye -> image-right eye)
-    //   D  = unit vector "down" the face (perpendicular to R)
-    //   s  = the inter-ocular distance, used as the face's unit of length
-    //   C  = the anchor origin, roughly the nose, ~0.62 s below the eye midpoint
-    // A face-local point (u, v) maps to the image as  C + s * (u*R + v*D).
-    cv::Point2f R, D, C;
-    float s;
-    float yaw = 0.f; // rough left/right head turn in [-1, 1]; 0 = facing forward
-    if (eyes.has) {
-        cv::Point2f d = eyes.right - eyes.left;
-        s = std::sqrt(d.x * d.x + d.y * d.y);
-        if (s < 12.f) return; // eyes implausibly close together -> skip
-        R = d * (1.f / s);
-        D = cv::Point2f(-R.y, R.x); // rotate R by +90deg -> points down the face
-        cv::Point2f eyeMid = (eyes.left + eyes.right) * 0.5f;
-        C = eyeMid + D * (0.62f * s);
-        // Where the eyes sit horizontally inside the face box is a cheap proxy
-        // for yaw: turning the head slides the visible eyes off box centre.
-        cv::Point2f boxCtr(f.x + f.width * 0.5f, f.y + f.height * 0.5f);
-        cv::Point2f off = eyeMid - boxCtr;
-        yaw = clamp01(0.5f + 1.2f * (off.x * R.x + off.y * R.y) / s) * 2.f - 1.f;
-    } else {
-        // No eyes: fall back to the face box (upright, no roll/yaw tracking).
-        R = cv::Point2f(1.f, 0.f);
-        D = cv::Point2f(0.f, 1.f);
-        s = 0.42f * f.width;
-        if (s < 12.f) return;
-        cv::Point2f eyeMid(f.x + 0.5f * f.width, f.y + 0.42f * f.height);
-        C = eyeMid + D * (0.62f * s);
-    }
-
-    // Face-local (u,v) -> image point.
-    auto P = [&](float u, float v) { return C + s * (u * R + v * D); };
-    // Ellipse rotation whose local-y axis aligns with image direction `dir`.
-    auto rotAxis = [](cv::Point2f dir) { return std::atan2(-dir.x, dir.y); };
-
-    // One global light, upper-left and toward the viewer, shared by every piece
-    // so the whole pig looks lit from the same place (key to the 3D read).
-    const cv::Vec3f light(-0.45f, -0.60f, 0.72f);
-    // Pig palette (BGR).
-    const cv::Scalar earOuter(170, 150, 238);
-    const cv::Scalar earInner(135, 110, 205);
-    const cv::Scalar snoutPink(165, 145, 236);
-    const cv::Scalar snoutRim(120, 100, 195);
-    const cv::Scalar nostril(70, 55, 120);
-    const cv::Scalar cheek(175, 150, 246);
-
-    // Gentle idle ear wiggle; the two ears flick in opposition so it reads as
-    // lively rather than a rigid overlay.
-    const float wig = 0.06f * std::sin((float)phase * 0.11f);
-
-    // --- Ears (drawn first, behind the snout) ---
-    auto drawEar = [&](float side /* -1 left, +1 right */) {
-        // Ear centre, nudged with the head turn so the near ear leads.
-        float u = side * 0.98f + yaw * 0.30f;
-        float v = -1.05f;
-        cv::Point2f ec = P(u, v);
-        // Major axis points up and outward from the head.
-        cv::Point2f axis = (-D) + R * (side * 0.55f);
-        float an = std::sqrt(axis.x * axis.x + axis.y * axis.y);
-        if (an > 1e-6f) axis *= 1.f / an;
-        float rot = rotAxis(axis) + side * wig;
-        // Foreshorten the far ear / widen the near one for a 3D turn.
-        float widen = 1.f + side * yaw * 0.4f;
-        widen = std::max(0.6f, std::min(1.4f, widen));
-        float rx = std::max(3.f, 0.40f * s * widen);
-        float ry = 0.80f * s;
-        drawBulge(frame, ec, rx, ry, rot, earOuter, light, 0.34f, 0.35f, 0.97f);
-        // Inner ear: a smaller, deeper-pink hollow, seated toward the face.
-        cv::Point2f inC = ec + (D * (0.16f * s)) + (R * (side * -0.04f * s));
-        drawBulge(frame, inC, rx * 0.52f, ry * 0.60f, rot, earInner, light, 0.5f,
-                  0.1f, 0.9f);
-    };
-    drawEar(-1.f);
-    drawEar(+1.f);
-
-    // --- Cheeks: soft, near-flat blush under the snout's sides ---
-    for (float side : {-1.f, 1.f}) {
-        cv::Point2f cc = P(side * 0.92f + yaw * 0.25f, 0.34f);
-        drawBulge(frame, cc, 0.34f * s, 0.30f * s, rotAxis(D), cheek, light, 0.85f,
-                  0.f, 0.30f);
-    }
-
-    // --- Snout (front-most): a wide bulge with two nostrils ---
-    float su = yaw * 0.35f, sv = 0.06f;
-    cv::Point2f sc = P(su, sv);
-    float srot = rotAxis(D);
-    float srx = 0.62f * s, sry = 0.46f * s;
-    // Darker rim behind, for a defined edge and a hint of cast shadow.
-    drawBulge(frame, sc, srx * 1.12f, sry * 1.14f, srot, snoutRim, light, 0.55f,
-              0.f, 0.85f);
-    // The snout face itself.
-    drawBulge(frame, sc, srx, sry, srot, snoutPink, light, 0.32f, 0.55f, 0.97f);
-    // Two nostrils, placed in the snout's own frame so they turn with it.
-    for (float side : {-1.f, 1.f}) {
-        cv::Point2f nc = P(su + side * 0.20f, sv + 0.02f);
-        drawBulge(frame, nc, 0.085f * s, 0.13f * s, srot, nostril, light, 0.28f,
-                  0.12f, 0.92f);
-    }
+    // The pig is a set of real 3D meshes (ears + snout) rendered through a
+    // perspective camera by pig3d, using a head pose estimated from the eye
+    // landmarks and the face box. Keeping the graphics three-dimensional is what
+    // makes them share the face's orientation and perspective -- the snout
+    // protrudes and foreshortens, the ears swing around and occlude behind the
+    // head as it turns -- instead of looking like flat stickers.
+    cv::Point2f l = eyes.has ? eyes.left : cv::Point2f(-1.f, -1.f);
+    cv::Point2f r = eyes.has ? eyes.right : cv::Point2f(-1.f, -1.f);
+    pig3d::render(frame, f, eyes.has, l, r, phase);
 }
 
 void FaceFilter::drawPigPreview(cv::Mat& frame, const cv::Rect& face,
