@@ -56,10 +56,34 @@ A touch-friendly, **icon-only** camera app for the **Raspberry Pi Zero 2 W**
 | Headless — no X11 / window manager | SDL2 `kmsdrm`/`fbcon` renders directly to HDMI |
 | WhatsApp-style facial filters | `FaceFilter` locates facial landmarks with MediaPipe's Face Mesh and warps the mouth/brows with `cv::remap`; the crying filter also draws tears (`filters.cpp`, `landmarks.hpp`, `mp_landmarker.cpp`) |
 
+## Download a prebuilt build (Raspberry Pi Zero 2 W)
+
+If you just want to run it, grab a prebuilt **aarch64** bundle instead of
+building from source. The [**Build (Raspberry Pi aarch64)**](../../actions/workflows/build.yml)
+GitHub Actions workflow compiles it natively on arm64 inside a Debian Bookworm
+container (matching the Pi's glibc 2.36 / OpenCV 4.6) and publishes
+`open-lego-camera-<ver>-aarch64-rpi.tar.gz` — the binary, its MediaPipe Face Mesh
+library and the `face_landmarker.task` model in one archive. Download it from the
+[Releases page](../../releases) (or from a workflow run's artifacts), then:
+
+```sh
+tar xzf open-lego-camera-*-aarch64-rpi.tar.gz
+cd open-lego-camera-*-aarch64-rpi
+./install.sh          # apt-installs OpenCV/SDL2/ffmpeg/libcamera, installs the app
+open-lego-camera      # run on the Pi's HDMI console
+```
+
+The bundle's MediaPipe library comes from the companion
+[media-pipe-builder](https://github.com/sepinedas/media-pipe-builder) release, so
+that project must have published a release first; the workflow fetches it
+automatically (or trigger a build manually and pass a specific
+`media-pipe-builder` tag). To cut a release, push a `v*` tag or run the workflow
+with **Publish a GitHub Release** enabled.
+
 ## Dependencies
 
-Install the development libraries (names are for Raspberry Pi OS / Debian
-Bookworm):
+Building from source instead? Install the development libraries (names are for
+Raspberry Pi OS / Debian Bookworm):
 
 ```sh
 sudo apt install build-essential cmake pkg-config \

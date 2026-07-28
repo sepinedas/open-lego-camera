@@ -1,0 +1,139 @@
+name: Build (Raspberry Pi aarch64)
+
+# Builds a downloadable open-lego-camera bundle for 64-bit Raspberry Pi OS
+# (Bookworm) on a Raspberry Pi Zero 2 W. Built natively on GitHub's free arm64
+# runners, inside a Debian Bookworm container, so the binary matches the Pi's
+# glibc 2.36 and OpenCV 4.6.
+#
+# The build links MediaPipe's Tasks Vision library from the companion project
+# https://github.com/sepinedas/media-pipe-builder -- its latest release .deb is
+# fetched automatically (override the repo/tag via workflow_dispatch inputs).
+
+on:
+  workflow_dispatch:
+    inputs:
+      mediapipe_repo:
+        description: "Repo publishing the MediaPipe .deb"
+        default: "sepinedas/media-pipe-builder"
+      mediapipe_release:
+        description: "MediaPipe release tag to link against ('latest' or e.g. mp-v0.10.35)"
+        default: "latest"
+      publish_release:
+        description: "Publish a GitHub Release with the bundle"
+        type: boolean
+        default: false
+  push:
+    tags:
+      - "v*"
+    # Bootstrap: let the pipeline run from its development branch before it is
+    # merged to the default branch (where tag/dispatch triggers apply).
+    branches:
+      - "claude/mediapipe-cpp-raspberry-pi-8522dc"
+    paths:
+      - ".github/workflows/build.yml"
+      - "scripts/ci_build.sh"
+      - "packaging/**"
+      - "src/**"
+      - "CMakeLists.txt"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build for aarch64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    env:
+      MP_REPO: ${{ github.event.inputs.mediapipe_repo || 'sepinedas/media-pipe-builder' }}
+      MP_RELEASE: ${{ github.event.inputs.mediapipe_release || 'latest' }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tags, for `git describe`
+
+      - name: Resolve parameters
+        id: params
+        run: |
+          set -euo pipefail
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            VER="${GITHUB_REF_NAME}"
+            PUBLISH="true"
+            REL_TAG="${GITHUB_REF_NAME}"
+          else
+            VER="$(git describe --tags --always 2>/dev/null || echo dev)"
+            PUBLISH="${{ github.event.inputs.publish_release || 'false' }}"
+            REL_TAG="build-${GITHUB_RUN_NUMBER}"
+          fi
+          echo "version=${VER}"      >> "$GITHUB_OUTPUT"
+          echo "publish=${PUBLISH}"  >> "$GITHUB_OUTPUT"
+          echo "release_tag=${REL_TAG}" >> "$GITHUB_OUTPUT"
+          echo "pkg=open-lego-camera-${VER}-aarch64-rpi" >> "$GITHUB_OUTPUT"
+          echo "Building ${VER} (publish=${PUBLISH})"
+
+      - name: Fetch the MediaPipe runtime (.deb)
+        run: |
+          set -euo pipefail
+          mkdir -p mp
+          echo "Fetching the MediaPipe .deb from ${MP_REPO} (${MP_RELEASE})"
+          if [ "${MP_RELEASE}" = "latest" ]; then
+            gh release download -R "${MP_REPO}" --pattern '*_arm64.deb' --dir mp || {
+              echo "::error::No MediaPipe release found in ${MP_REPO}. Publish one from media-pipe-builder first (see README), then re-run."; exit 1; }
+          else
+            gh release download "${MP_RELEASE}" -R "${MP_REPO}" --pattern '*_arm64.deb' --dir mp || {
+              echo "::error::MediaPipe release '${MP_RELEASE}' not found in ${MP_REPO}."; exit 1; }
+          fi
+          ls -lh mp
+
+      - name: Build & package in Debian Bookworm (aarch64)
+        run: |
+          set -euxo pipefail
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}":/work \
+            -w /work \
+            -e GITHUB_WORKSPACE=/work \
+            -e OLC_VERSION="${{ steps.params.outputs.version }}" \
+            -e HOST_UID="$(id -u)" \
+            -e HOST_GID="$(id -g)" \
+            debian:bookworm \
+            bash scripts/ci_build.sh
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.params.outputs.pkg }}
+          path: |
+            ${{ steps.params.outputs.pkg }}.tar.gz
+            ${{ steps.params.outputs.pkg }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish GitHub Release
+        if: steps.params.outputs.publish == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.params.outputs.release_tag }}
+          name: open-lego-camera ${{ steps.params.outputs.version }} (Raspberry Pi aarch64)
+          body: |
+            Prebuilt **open-lego-camera** for 64-bit Raspberry Pi OS (Bookworm,
+            aarch64). Built natively on arm64 inside a Debian Bookworm container
+            (glibc 2.36, OpenCV 4.6). Verified target: **Raspberry Pi Zero 2 W**.
+
+            ### Install
+            ```bash
+            tar xzf open-lego-camera-*-aarch64-rpi.tar.gz
+            cd open-lego-camera-*-aarch64-rpi
+            ./install.sh
+            open-lego-camera
+            ```
+
+            The bundle ships the binary, its MediaPipe Face Mesh library and the
+            `face_landmarker.task` model; `install.sh` apt-installs the remaining
+            runtime libraries (OpenCV, SDL2, ffmpeg, libcamera/GStreamer). See the
+            bundled `README.md` for options and troubleshooting.
+          files: |
+            ${{ steps.params.outputs.pkg }}.tar.gz
+            ${{ steps.params.outputs.pkg }}.tar.gz.sha256
+          fail_on_unmatched_files: true

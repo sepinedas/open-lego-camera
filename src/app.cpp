@@ -386,8 +386,10 @@ bool App::init(const Config& cfg) {
     // model; the facial filters just stay inert.
     std::vector<std::string> modelPaths;
     if (!cfg_.faceLandmarker.empty()) modelPaths.push_back(cfg_.faceLandmarker);
-    modelPaths.push_back("/opt/mediapipe/models/face_landmarker.task");
     modelPaths.push_back("/usr/share/mediapipe/face_landmarker.task");
+    modelPaths.push_back("/opt/mediapipe/models/face_landmarker.task");
+    modelPaths.push_back("/opt/open-lego-camera/share/face_landmarker.task");
+    modelPaths.push_back("share/face_landmarker.task");
     modelPaths.push_back("face_landmarker.task");
     for (const std::string& p : modelPaths) {
         if (faceFilter_.setLandmarker(p)) {
