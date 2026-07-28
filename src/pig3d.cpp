@@ -174,9 +174,10 @@ Mesh buildNostrils() {
     return m;
 }
 
-// One ear: a tapering, gently cupped triangular flap standing up and out from
-// the top-side of the head. Double-sided; the lower-inner part is tinted a
-// deeper pink so the ear reads as having an inner hollow.
+// One ear: a broad, gently cupped triangular flap seated high on the top-side of
+// the head (clear of the eyes), rising up-and-out from a wide base and drooping
+// forward at the tip like a real pig's ear. Double-sided; the lower-inner part is
+// tinted a deeper pink so the ear reads as having an inner hollow.
 Mesh buildEar(float side, float wiggle) {
     Mesh m;
     m.doubleSided = true;
@@ -186,30 +187,40 @@ Mesh buildEar(float side, float wiggle) {
     const Vec3f pink(170, 150, 238);
     const Vec3f inner(120, 95, 200);
 
-    const Vec3f baseC(side * 0.64f, -0.44f, 0.04f);
-    // Ear plane normal: faces forward, angled out and slightly up.
-    Vec3f N = norm(Vec3f(side * 0.44f, -0.18f, -0.85f));
-    Vec3f width = norm(Vec3f(0.f, 1.f, 0.f).cross(N)); // across the ear
-    if (width[0] * side < 0.f) width = -width;         // point outward
-    Vec3f length = norm(width.cross(N));               // up the ear
-    if (length[1] > 0.f) length = -length;             // ensure it points up
-    const float earLen = 1.22f, curv = 0.15f;
+    // Seat the ear high on the top-side of the head, well above and outside the
+    // eyes (model eyes are at (+-0.5, -0.35)), so it never covers them.
+    const Vec3f baseC(side * 0.74f, -0.82f, 0.02f);
+    // The ear is a broad triangular flap. `length` runs up and outward from the
+    // base; `front` is roughly where its front face looks (forward, out, up).
+    Vec3f length = norm(Vec3f(side * 0.42f, -1.0f, -0.05f)); // up and out
+    Vec3f front = Vec3f(side * 0.45f, -0.20f, -0.86f);
+    Vec3f width = norm(front.cross(length)); // across the ear, in its plane
+    if (width[0] * side < 0.f) width = -width;
+    Vec3f N = norm(length.cross(width)); // true plane normal
+    if (N[2] > 0.f) N = -N;              // face the camera
+    // Floppy forward-and-down droop of the tip -> a real ear, not a stiff horn.
+    const Vec3f droopDir = norm(Vec3f(side * 0.05f, 0.42f, -1.0f));
+    const float earLen = 1.02f, curv = 0.12f, droop = 0.34f;
 
-    const int nS = 11, nT = 8;
+    const int nS = 13, nT = 9;
     std::vector<std::vector<int>> g(nT, std::vector<int>(nS));
     for (int ti = 0; ti < nT; ++ti) {
         float t = (float)ti / (nT - 1);
-        // Broad, rounded base tapering to a soft point -> a floppy ear, not a horn.
-        float halfW = 0.54f * std::pow(1.f - t, 0.5f) * (0.55f + 0.45f * std::cos(t * 1.2f));
+        // Wide, rounded base tapering to a soft point: broad triangle, not a spike.
+        float halfW = 0.62f * std::pow(1.f - t, 0.85f);
+        // Round the very base corners in a touch.
+        if (t < 0.12f) halfW *= 0.75f + 0.25f * (t / 0.12f);
         for (int si = 0; si < nS; ++si) {
             float s = 2.f * si / (nS - 1) - 1.f; // -1..1 across width
             Vec3f p = baseC + length * (t * earLen) + width * (s * halfW);
-            // Cup the flap: bulge the middle forward, easing off toward the tip.
-            float cup = curv * (1.f - s * s) * (1.f - 0.45f * t);
+            // Gentle cup so the flap catches light without curling like a cone.
+            float cup = curv * (1.f - s * s) * (1.f - 0.5f * t);
             p += N * cup;
-            // Deeper pink toward the lower-central hollow.
-            float inF = clampf((1.f - std::fabs(s)) * 1.15f - 0.2f, 0.f, 1.f) *
-                        clampf(1.25f * (1.f - t), 0.f, 1.f);
+            // Progressive forward droop, strongest at the tip.
+            p += droopDir * (droop * t * t);
+            // Deeper pink toward the lower-central inner hollow.
+            float inF = clampf((1.f - std::fabs(s)) * 1.1f - 0.15f, 0.f, 1.f) *
+                        clampf(1.3f * (1.f - t), 0.f, 1.f);
             Vec3f c = pink * (1.f - inF) + inner * inF;
             g[ti][si] = m.add(p, c);
         }
