@@ -24,7 +24,6 @@ add_executable(open-lego-camera
   src/main.cpp
   src/config.cpp
   src/camera.cpp
-  src/recorder.cpp
   src/gallery.cpp
   src/icons.cpp
   src/ui.cpp

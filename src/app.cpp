@@ -21,7 +21,7 @@ namespace olc {
 
 // Rotate a BGR frame clockwise by `deg` (0/90/180/270). Returns a rotated copy;
 // for 0 (or any non-multiple) it returns the input unchanged. Used to bake the
-// camera-image rotation into stills and recordings so they match the preview.
+// camera-image rotation into captured stills so they match the preview.
 static cv::Mat rotatedBGR(const cv::Mat& in, int deg) {
     switch (((deg % 360) + 360) % 360) {
         case 90:  { cv::Mat o; cv::rotate(in, o, cv::ROTATE_90_CLOCKWISE); return o; }
@@ -32,7 +32,6 @@ static cv::Mat rotatedBGR(const cv::Mat& in, int deg) {
 }
 
 App::~App() {
-    if (recorder_.recording()) recorder_.stop();
     if (tex_) SDL_DestroyTexture(tex_);
     if (canvas_) SDL_DestroyTexture(canvas_);
     if (thumbTex_) SDL_DestroyTexture(thumbTex_);
@@ -278,7 +277,7 @@ void App::refreshThumbnail() {
 // falling back to the framed-landscape icon when nothing has been captured.
 void App::drawGalleryButton(const Button& b, Uint8 alpha) {
     if (!thumbTex_) {
-        Menu::drawButton(ren_, b, alpha, false);
+        Menu::drawButton(ren_, b, alpha);
         return;
     }
     int s = b.r;
@@ -377,15 +376,16 @@ void App::blitCamera(const cv::Mat& frame, PixelFormat fmt, int imgW, int imgH,
     }
     SDL_UpdateTexture(tex_, nullptr, upload.data, static_cast<int>(upload.step));
 
-    // Letterbox the (full) image into the logical view, then let the GPU crop
-    // to `src` when zooming -- the destination stays put so the framing is
-    // stable as you zoom. When the camera image is rotated 90/270 its bounding
-    // box swaps width/height, so fit against the swapped dimensions and let the
+    // Fill the whole view (cover), letting the GPU crop to `src` when zooming.
+    // Scaling to the *larger* fit factor makes the image take the panel's exact
+    // aspect ratio -- the overflow is clipped by the render target, so there are
+    // no letterbox bars. When the camera image is rotated 90/270 its bounding
+    // box swaps width/height, so cover against the swapped dimensions and let the
     // GPU spin the frame about its centre (SDL_RenderCopyEx).
     int rot = ((rotate % 360) + 360) % 360;
     bool swap = (rot == 90 || rot == 270);
-    double s = swap ? std::min((double)viewW_ / imgH, (double)viewH_ / imgW)
-                    : std::min((double)viewW_ / imgW, (double)viewH_ / imgH);
+    double s = swap ? std::max((double)viewW_ / imgH, (double)viewH_ / imgW)
+                    : std::max((double)viewW_ / imgW, (double)viewH_ / imgH);
     int dw = (int)(imgW * s), dh = (int)(imgH * s);
     SDL_Rect dst{(viewW_ - dw) / 2, (viewH_ - dh) / 2, dw, dh};
     if (rot == 0) {
@@ -596,7 +596,6 @@ void App::onTap(int x, int y) {
 void App::dispatch(Action a) {
     switch (a) {
         case Action::Shutter:     capturePhoto(); break;
-        case Action::Record:      toggleRecording(); break;
         case Action::ZoomIn:      cam_->zoomIn(); break;
         case Action::ZoomOut:     cam_->zoomOut(); break;
         case Action::OpenGallery:
@@ -619,9 +618,6 @@ void App::dispatch(Action a) {
         case Action::CycleFilter:
             filter_ = nextFilter(filter_);
             filterLabelUntil_ = SDL_GetTicks() + 1500;
-            break;
-        case Action::SwitchCamera:
-            switchCamera();
             break;
         case Action::StartCamera:
             mode_ = Mode::Camera;
@@ -674,61 +670,6 @@ void App::capturePhoto() {
     refreshThumbnail();           // update the gallery-button preview
 }
 
-void App::toggleRecording() {
-    if (recorder_.recording()) {
-        recorder_.stop();
-        std::cout << "recording stopped\n";
-        refreshThumbnail();
-    } else if (!lastNative_.empty()) {
-        ensureDir(cfg_.outputDir); // same guard as photos: writer needs the dir
-        std::string path = timestampName("VID", ".mp4");
-        // Recorded frames are the full-size zoomed BGR the camera hands back,
-        // rotated to match the preview -- so 90/270 swaps the writer's geometry.
-        cv::Size sz(cam_->width(), cam_->height());
-        if (cfg_.cameraRotate == 90 || cfg_.cameraRotate == 270)
-            std::swap(sz.width, sz.height);
-        if (recorder_.start(path, sz, cam_->fps(), cfg_.audio))
-            std::cout << "recording -> " << path << "\n";
-    }
-}
-
-// Flip the live source between the Pi camera and a USB webcam. The other source
-// is opened into a temporary first; only on success do we swap it in, so if the
-// target isn't present (e.g. no webcam plugged in) the running camera keeps
-// going. Any in-progress recording is stopped first -- it belongs to the old
-// source's geometry -- and the digital zoom resets since the new source may have
-// a different resolution.
-void App::switchCamera() {
-    if (!cam_) return;
-    if (recorder_.recording()) {
-        recorder_.stop();
-        refreshThumbnail();
-    }
-
-    CameraKind target = (cam_->kind() == CameraKind::PiCam) ? CameraKind::Webcam
-                                                            : CameraKind::PiCam;
-    Config c = cfg_;
-    c.camera = target;
-    std::unique_ptr<Camera> next = Camera::open(c);
-
-    cameraLabelUntil_ = SDL_GetTicks() + 1800;
-    if (!next) {
-        cameraLabel_ = (target == CameraKind::Webcam) ? "NO USB CAMERA"
-                                                      : "NO PI CAMERA";
-        std::cerr << "camera switch to "
-                  << (target == CameraKind::Webcam ? "webcam" : "picam")
-                  << " failed; keeping current source\n";
-        return;
-    }
-
-    cam_ = std::move(next);
-    lastNative_.release();      // old-format frame no longer matches the new source
-    cameraLabel_ = (cam_->kind() == CameraKind::PiCam) ? "PI CAMERA" : "USB CAMERA";
-    std::cout << "camera: switched to " << cam_->description() << " "
-              << cam_->width() << "x" << cam_->height() << " @ " << cam_->fps()
-              << "fps\n";
-}
-
 // Blocking playback of the selected video: renders frames at the source fps and
 // returns to the gallery on end, tap or key.
 void App::playCurrentVideo() {
@@ -761,13 +702,8 @@ void App::playCurrentVideo() {
     menu_.wake();
 }
 
-// Leave the live camera and return to the welcome screen. Stop any recording
-// first so we never leave a dangling video writer running in the background.
+// Leave the live camera and return to the welcome screen.
 void App::goHome() {
-    if (recorder_.recording()) {
-        recorder_.stop();
-        refreshThumbnail();
-    }
     mode_ = Mode::Welcome;
     menu_.wake();
 }
@@ -838,7 +774,7 @@ void App::renderWelcome() {
 
     // Two always-visible controls with labels beneath them.
     auto btns = menu_.layout(Mode::Welcome, viewW_, viewH_, false);
-    for (const auto& b : btns) Menu::drawButton(ren_, b, 255, false);
+    for (const auto& b : btns) Menu::drawButton(ren_, b, 255);
     int lscale = std::max(2, std::min(viewH_ / 220, 3));
     for (const auto& b : btns) {
         const char* label = (b.action == Action::StartCamera) ? "START" : "SLEEP";
@@ -870,27 +806,23 @@ void App::renderCamera() {
     cv::Mat frame;
     if (cam_->read(frame)) lastNative_ = frame; // camera-native, no zoom applied
 
-    const bool recording = recorder_.recording();
     const bool filtering = (filter_ != Filter::None);
     // An NV12 frame can be filtered without a full-frame CPU convert -- only the
     // face region is reshaped and re-encoded, the GPU converts and zooms the
-    // rest (see renderFilteredNV12). A BGR webcam, a renderer without NV12
-    // textures, or recording (which needs the whole frame as BGR to write) all
-    // fall back to converting the full frame.
-    const bool nv12FilterPath = filtering && !recording &&
+    // rest (see renderFilteredNV12). A BGR webcam or a renderer without NV12
+    // textures falls back to converting the full frame.
+    const bool nv12FilterPath = filtering &&
                                 cam_->format() == PixelFormat::NV12 &&
                                 !nv12Unsupported_ && !lastNative_.empty();
 
     beginFrame();
-    if (recording || (filtering && !nv12FilterPath)) {
+    if (filtering && !nv12FilterPath) {
         // Full-resolution BGR: convert, reshape the face, then zoom. The filter
         // runs before the zoom crop, matching the NV12 preview path so a photo
-        // or recording carries exactly the expression shown on screen.
+        // carries exactly the expression shown on screen.
         cv::Mat bgr = cam_->nativeToBGR(lastNative_);
         faceFilter_.apply(bgr, filter_, filterPhase_);
         cam_->cropZoom(bgr);
-        // Recordings bake in the camera rotation so the file matches the preview.
-        if (recording) recorder_.writeFrame(rotatedBGR(bgr, cfg_.cameraRotate));
         renderMat(bgr, cfg_.cameraRotate);
     } else if (nv12FilterPath) {
         renderFilteredNV12();
@@ -907,12 +839,6 @@ void App::renderCamera() {
 
     if (filter_ != Filter::None) filterPhase_ += 1.0;
 
-    // Persistent recording indicator (independent of the menu fade).
-    if (recorder_.recording()) {
-        int r = std::max(8, viewH_ / 60);
-        filledCircleRGBA(ren_, 24 + r, 24 + r, r, 235, 60, 60, 235);
-    }
-
     if (menu_.awake()) {
         Uint8 a = menu_.alpha();
         auto btns = menu_.layout(Mode::Camera, viewW_, viewH_, false);
@@ -920,7 +846,7 @@ void App::renderCamera() {
             if (b.action == Action::OpenGallery)
                 drawGalleryButton(b, a); // last-shot thumbnail
             else
-                Menu::drawButton(ren_, b, a, recorder_.recording());
+                Menu::drawButton(ren_, b, a);
         }
     }
 
@@ -950,20 +876,6 @@ void App::renderCamera() {
                        viewW_ / 2 + tw / 2 + pad, y + 8 * scale + pad,
                        6, 0, 0, 0, 120);
         drawText(viewW_ / 2, y + pad / 2, name, scale, {255, 255, 255, 240}, true);
-    }
-
-    // Source name banner, shown briefly after tapping the switch-camera button.
-    // Sits below the filter banner so the two never overlap.
-    if (now < cameraLabelUntil_ && !cameraLabel_.empty()) {
-        int scale = std::max(2, viewH_ / 200);
-        int tw = 8 * (int)cameraLabel_.size() * scale;
-        int pad = 8 * scale / 2;
-        int y = viewH_ / 6 + 8 * scale + 2 * pad;
-        roundedBoxRGBA(ren_, viewW_ / 2 - tw / 2 - pad, y,
-                       viewW_ / 2 + tw / 2 + pad, y + 8 * scale + pad,
-                       6, 0, 0, 0, 120);
-        drawText(viewW_ / 2, y + pad / 2, cameraLabel_, scale,
-                 {255, 255, 255, 240}, true);
     }
 
     // Shutter flash: a quick white wash that fades out after a capture.
@@ -1062,7 +974,7 @@ void App::renderGallery() {
     if (a > 0) {
         bool hasVideo = gallery_->currentIsVideo();
         auto btns = menu_.layout(Mode::Gallery, viewW_, viewH_, hasVideo);
-        for (const auto& b : btns) Menu::drawButton(ren_, b, a, false);
+        for (const auto& b : btns) Menu::drawButton(ren_, b, a);
     }
     present();
 }
@@ -1097,7 +1009,7 @@ int App::run() {
                 else clear();
                 boxRGBA(ren_, 0, 0, viewW_, viewH_, 0, 0, 0, 120);
                 auto btns = menu_.layout(Mode::ConfirmDelete, viewW_, viewH_, false);
-                for (const auto& b : btns) Menu::drawButton(ren_, b, 255, false);
+                for (const auto& b : btns) Menu::drawButton(ren_, b, 255);
                 present();
                 break;
             }

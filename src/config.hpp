@@ -12,7 +12,6 @@ struct Config {
     std::string outputDir;   // where photos/videos are written (default: ~/Pictures/open-lego-camera)
     std::string driver;      // forced SDL_VIDEODRIVER ("kmsdrm", "fbcon", "x11", ...); empty = auto
     bool windowed = false;   // windowed instead of fullscreen (handy on a desktop)
-    bool audio = true;       // record sound with videos when a mic is present
     int webcamIndex = -1;    // force a specific /dev/videoN (-1 = probe)
     std::string picamName;   // libcamera camera-name to select when several exist
     int rotate = 0;          // rotate the whole UI 0/90/180/270 (clockwise)

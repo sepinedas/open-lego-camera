@@ -4,10 +4,8 @@ A touch-friendly, **icon-only** camera app for the **Raspberry Pi Zero 2 W**
 (or any Linux box with a webcam), written in **C++17**.
 
 - Works with the **Raspberry Pi camera module** (via libcamera / GStreamer) or
-  any **USB webcam** (via V4L2) — auto-detected at startup, and switchable
-  **live** with the **switch-camera** button (the two-arrows-around-a-camera
-  icon) so you can flip between the Pi camera and a USB camera without
-  restarting.
+  any **USB webcam** (via V4L2) — auto-detected at startup, or selected
+  explicitly with `--camera picam` / `--camera webcam`.
 - Runs on a **headless Raspberry Pi** with **no desktop, X11 or Wayland** — it
   draws straight to the **HDMI** output through DRM/KMS (SDL2's `kmsdrm`
   driver, selected automatically).
@@ -19,23 +17,23 @@ A touch-friendly, **icon-only** camera app for the **Raspberry Pi Zero 2 W**
 - Fullscreen live preview with a **translucent, auto-hiding menu**: a few
   seconds after your last tap the menu fades away; tap anywhere to bring it
   back.
-- Menu buttons are **translucent icons, no text**: home, switch-camera, filter,
-  gallery, shutter, record.
+- Menu buttons are **translucent icons, no text**: home, filter, gallery,
+  shutter.
+- The **live preview fills the whole screen** — it's scaled to the panel's
+  aspect ratio (cropping the overflow) so there are no letterbox bars.
 - **Pinch-to-zoom** with two fingers (digital, up to 4×); the magnification
   factor (e.g. `2.0x`) shows briefly while zooming.
 - A **shutter-flash animation** plays when a photo is taken, and the **gallery
-  button shows a thumbnail** of the most recent photo/video.
-- **Video recording with sound** when a microphone is present (mux via
-  `ffmpeg`); disable with `--no-audio`.
-- Built-in **gallery**: browse captured photos and videos, **play** videos
-  back, and **delete** them behind an icon-only ✓ / ✗ confirmation. The
-  capture **date & time** is shown translucent across the top.
+  button shows a thumbnail** of the most recent capture.
+- Built-in **gallery**: browse captured photos, **play** back any videos
+  already on disk, and **delete** items behind an icon-only ✓ / ✗ confirmation.
+  The capture **date & time** is shown translucent across the top.
 - **WhatsApp-style facial filters** (smiley button): a **Big Smile** that
   stretches your mouth into a wide grin — with your teeth brightening as you
   open it — and a **Crying** face that pulls your mouth and brows into a frown
   and adds animated falling **tears**. The face is *reshaped in place* (its own
   pixels warped), not covered with cartoon graphics — only the tears are drawn
-  on top. Applies live to the preview and to captured photos/videos.
+  on top. Applies live to the preview and to captured photos.
 
 ![Welcome screen](docs/welcome-screen.png)
 
@@ -50,10 +48,10 @@ A touch-friendly, **icon-only** camera app for the **Raspberry Pi Zero 2 W**
 | Requirement | How |
 | --- | --- |
 | Welcome screen with a Lego-brick camera; Start / Sleep options | `Mode::Welcome` draws `drawLegoCamera` (bricks + lens in `icons.cpp`); Sleep blanks the panel via `vcgencmd display_power` and wakes on a double-tap |
-| Runs with a webcam **or** Pi camera | `Camera` auto-detects: libcamera (GStreamer) first, then V4L2 webcam; the switch-camera button toggles between the two at runtime (`App::switchCamera`) |
+| Runs with a webcam **or** Pi camera | `Camera` auto-detects: libcamera (GStreamer) first, then V4L2 webcam; force one with `--camera picam` / `--camera webcam` |
 | Written in C++ | C++17, CMake build |
 | Translucent, auto-hiding menu | `Menu` fades the icon row out ~3.5 s after the last tap; any tap wakes it |
-| Photos, video **with audio**, zoom, gallery, delete | shutter / record / gallery icons; pinch-to-zoom; `arecord`+`ffmpeg` mux audio |
+| Photos, zoom, gallery, delete | shutter / gallery icons; pinch-to-zoom |
 | Icon-only buttons, no text | all icons are drawn as vector shapes (`icons.cpp`, SDL2_gfx) |
 | Headless — no X11 / window manager | SDL2 `kmsdrm`/`fbcon` renders directly to HDMI |
 | WhatsApp-style facial filters | `FaceFilter` finds the face (Haar cascade) and warps the mouth/brows with `cv::remap`; the crying filter also draws tears (`filters.cpp`) |
@@ -66,12 +64,6 @@ Bookworm):
 ```sh
 sudo apt install build-essential cmake pkg-config \
                  libsdl2-dev libsdl2-gfx-dev libopencv-dev
-```
-
-Optional, for **video sound**: `ffmpeg` (muxing) and `alsa-utils` (`arecord`):
-
-```sh
-sudo apt install ffmpeg alsa-utils
 ```
 
 The **facial filters** need OpenCV's `objdetect` module (part of `libopencv-dev`
@@ -117,8 +109,8 @@ texture — instead of spending a CPU core on a per-frame `videoconvert`. Pinch
 Zero 2 W, where the CPU colour-convert was the frame-rate bottleneck.
 
 A frame is only converted to BGR on the CPU when something actually needs the
-pixels — taking a photo or recording — so the common "just previewing" case
-does no colour conversion or resize on the CPU at all.
+pixels — taking a photo — so the common "just previewing" case does no colour
+conversion or resize on the CPU at all.
 
 The **facial filters** stay on that fast path too. Face detection runs directly
 on the NV12 **Y (luma) plane** — which _is_ a grayscale image — so it needs no
@@ -136,22 +128,12 @@ convert.
 
 If you have **more than one camera** (e.g. the IMX500 *and* a USB webcam),
 `--camera auto` tries the first libcamera camera before falling back to a
-webcam. Force the *starting* source explicitly with `--camera picam` /
-`--camera webcam`, and pick a specific libcamera camera with `--picam-name` —
-list the ids with:
+webcam. Force the source explicitly with `--camera picam` / `--camera webcam`,
+and pick a specific libcamera camera with `--picam-name` — list the ids with:
 
 ```sh
 rpicam-hello --list-cameras
 ```
-
-With both a Pi camera and a USB camera connected you don't have to choose up
-front: tap the **switch-camera** button in the live view to flip between them at
-any time. The app opens the *other* source before releasing the current one, so
-if the target isn't present (e.g. no USB camera plugged in) the running camera
-keeps going and a brief **`NO USB CAMERA`** / **`NO PI CAMERA`** banner explains
-why nothing changed. A successful switch shows the new source's name
-(**`PI CAMERA`** / **`USB CAMERA`**), resets the digital zoom, and stops any
-in-progress recording (its video belongs to the old source's resolution).
 
 Sanity-check the raw pipeline outside the app with:
 
@@ -189,7 +171,6 @@ build/open-lego-camera [options]
   --touch-flip-x / --touch-flip-y   mirror touch on an axis
   --driver NAME                force SDL video driver (kmsdrm, fbcon, x11)
   --windowed                   run in a window instead of fullscreen
-  --no-audio                   record video without sound
   --face-cascade PATH          Haar face-cascade XML for the facial filters
   --help                       show this help
 ```
@@ -198,7 +179,7 @@ build/open-lego-camera [options]
 
 Tap the **smiley** button in the camera menu to cycle the live
 facial filter: **Big Smile** → **Crying** → off. The active filter's name
-appears briefly on screen, and the effect is baked into any photo or video you
+appears briefly on screen, and the effect is baked into any photo you
 then capture.
 
 - **Big Smile** stretches your mouth's corners up and out into a wide grin and
@@ -230,7 +211,7 @@ touch controller is mounted rotated/mirrored **relative to the panel** (common
 on the HyperPixel) — reach for them only if taps are still off after `--rotate`.
 
 `--camera-rotate 90|180|270` rotates **only the camera image** — the live
-preview *and* the photos/videos you capture — while leaving the icon buttons and
+preview *and* the photos you capture — while leaving the icon buttons and
 the rest of the UI exactly where they are. Reach for it when the panel is
 mounted the right way up but the camera module itself sits sideways, so the
 picture comes in rotated but the controls don't need to move:
@@ -243,8 +224,8 @@ The image spins on the GPU for the preview (no extra CPU cost) and is baked into
 captures so a saved photo matches what you saw. It stacks with `--rotate`, which
 still turns the whole UI on top.
 
-- Captures are saved as `IMG_YYYYMMDD_HHMMSS.jpg` and
-  `VID_YYYYMMDD_HHMMSS.mp4`.
+- Photos are saved as `IMG_YYYYMMDD_HHMMSS.jpg`. The gallery can still play
+  back any existing `.mp4` videos in the output directory.
 - The app opens on the **welcome screen**; tap **Start Camera** to begin or
   **Sleep** to blank the screen (**double-tap** to wake). The **home** icon in
   the camera menu returns here.
@@ -463,7 +444,6 @@ line.
 | house (camera) | back to the welcome screen |
 | last-shot thumbnail (framed-landscape icon until the first capture) | open the gallery |
 | ring with dot | take a photo (plays a shutter flash) |
-| red dot → red square | start recording → stop (turns into a stop square) |
 | chevron (gallery) | back to the camera |
 | ◀ / ▶ triangles (gallery) | previous / next item |
 | triangle-in-ring (gallery) | play the selected video |
@@ -474,29 +454,17 @@ line.
 (digital, up to 4×). The current factor (`1.0x`–`4.0x`) appears briefly at the
 top while you pinch.
 
-## Audio
-
-Videos are recorded **with sound** when a microphone is present (the Pi camera
-module has none — plug in a USB mic or a webcam with one):
-
-- Frames are written by OpenCV's `VideoWriter` (`mp4v`) to a temp file while
-  `arecord` captures a WAV from the default ALSA input.
-- On stop, the two are muxed into the final `.mp4` in the background with
-  `ffmpeg -c:v copy -c:a aac`.
-- If a mic, `arecord` or `ffmpeg` is missing, recording silently falls back to
-  **video-only**. `--no-audio` forces this.
-
 ## Design notes
 
-- **Modules** (`src/`): `camera` (dual backend + digital zoom), `recorder`
-  (video + audio muxing), `gallery` (list/navigate/delete), `icons`
-  (procedural vector icons), `ui` (auto-hide menu, layout, hit-testing), `app`
-  (SDL display, event loop, per-mode rendering), `config` (CLI).
+- **Modules** (`src/`): `camera` (dual backend + digital zoom), `gallery`
+  (list/navigate/delete), `icons` (procedural vector icons), `ui` (auto-hide
+  menu, layout, hit-testing), `app` (SDL display, event loop, per-mode
+  rendering), `config` (CLI).
 - **Zoom** is a uniform centre-crop-and-rescale applied to both preview and
   captures, so behaviour is identical on the Pi camera and a webcam.
-- **Rendering**: each BGR frame is uploaded to a streaming SDL texture and
-  letterboxed to the screen; the translucent menu is composited on top with
-  alpha blending.
+- **Rendering**: each frame is uploaded to a streaming SDL texture and scaled to
+  **cover** the screen (cropping the overflow so there are no letterbox bars);
+  the translucent menu is composited on top with alpha blending.
 - Video **playback** decodes frames with OpenCV — no external player needed;
   tap anywhere to stop.
 

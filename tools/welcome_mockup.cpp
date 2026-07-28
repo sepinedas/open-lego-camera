@@ -69,7 +69,7 @@ static cv::Mat renderWelcome(int W, int H) {
     Menu menu;
     menu.wake();
     auto btns = menu.layout(Mode::Welcome, W, H, false);
-    for (const auto& b : btns) Menu::drawButton(r, b, 255, false);
+    for (const auto& b : btns) Menu::drawButton(r, b, 255);
     int lscale = std::max(2, std::min(H / 220, 3));
     for (const auto& b : btns)
         text(r, b.cx, b.cy + b.r + 12,
