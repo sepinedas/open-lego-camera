@@ -25,6 +25,9 @@ public:
     void next();
     void prev();
 
+    // Jump to the most recent item (files are stored newest-first).
+    void selectNewest() { index_ = 0; }
+
     // Delete the current file from disk and re-scan. No-op when empty.
     void deleteCurrent();
 

@@ -599,7 +599,7 @@ void App::dispatch(Action a) {
         case Action::ZoomIn:      cam_->zoomIn(); break;
         case Action::ZoomOut:     cam_->zoomOut(); break;
         case Action::OpenGallery:
-            gallery_->refresh(); refreshThumbnail(); mode_ = Mode::Gallery; break;
+            gallery_->refresh(); gallery_->selectNewest(); refreshThumbnail(); mode_ = Mode::Gallery; break;
         case Action::Back:        mode_ = Mode::Camera; break;
         case Action::Prev:        gallery_->prev(); break;
         case Action::Next:        gallery_->next(); break;
