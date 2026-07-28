@@ -29,7 +29,7 @@ static void drawFakePreview(SDL_Renderer* r, int w, int h) {
     SDL_RenderFillRect(r, &box);
 }
 
-static cv::Mat renderMode(Mode mode, int w, int h, bool hasVideo, bool recording) {
+static cv::Mat renderMode(Mode mode, int w, int h, bool hasVideo) {
     SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_ARGB8888);
     SDL_Renderer* r = SDL_CreateSoftwareRenderer(surf);
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
@@ -41,7 +41,7 @@ static cv::Mat renderMode(Mode mode, int w, int h, bool hasVideo, bool recording
     Menu menu;
     menu.wake();
     for (const auto& b : menu.layout(mode, w, h, hasVideo))
-        Menu::drawButton(r, b, mode == Mode::ConfirmDelete ? 255 : menu.alpha(), recording);
+        Menu::drawButton(r, b, mode == Mode::ConfirmDelete ? 255 : menu.alpha());
 
     cv::Mat out = surfaceToMat(surf);
     SDL_DestroyRenderer(r);
@@ -54,22 +54,23 @@ int main() {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) { SDL_Log("init: %s", SDL_GetError()); return 1; }
     const int W = 800, H = 480; // a common Pi touchscreen resolution
 
-    cv::Mat cam = renderMode(Mode::Camera, W, H, false, false);
-    cv::Mat rec = renderMode(Mode::Camera, W, H, false, true);
-    cv::Mat gal = renderMode(Mode::Gallery, W, H, true, false);
-    cv::Mat con = renderMode(Mode::ConfirmDelete, W, H, false, false);
+    cv::Mat cam = renderMode(Mode::Camera, W, H, false);
+    cv::Mat gal = renderMode(Mode::Gallery, W, H, true);
+    cv::Mat con = renderMode(Mode::ConfirmDelete, W, H, false);
 
     auto label = [](cv::Mat& m, const std::string& t) {
         cv::putText(m, t, {16, 34}, cv::FONT_HERSHEY_SIMPLEX, 0.7, {255, 255, 255}, 2);
     };
     label(cam, "CAMERA");
-    label(rec, "RECORDING");
     label(gal, "GALLERY (video)");
     label(con, "CONFIRM DELETE");
 
-    cv::Mat top, bot, sheet;
-    cv::hconcat(cam, rec, top);
-    cv::hconcat(gal, con, bot);
+    cv::Mat top, sheet;
+    cv::hconcat(cam, gal, top);
+    // Pad the confirm-delete panel to the full sheet width so vconcat matches.
+    cv::Mat bot;
+    cv::copyMakeBorder(con, bot, 0, 0, 0, top.cols - con.cols, cv::BORDER_CONSTANT,
+                       {0, 0, 0});
     cv::vconcat(top, bot, sheet);
     cv::imwrite("/home/user/open-lego-camera-cpp/build/ui-mockup.png", sheet);
     SDL_Quit();

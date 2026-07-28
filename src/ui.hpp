@@ -35,8 +35,7 @@ public:
                                bool hasVideo) const;
 
     // Draw one button (translucent disc + icon) at the given menu alpha.
-    static void drawButton(SDL_Renderer* ren, const Button& b, Uint8 alpha,
-                           bool recording);
+    static void drawButton(SDL_Renderer* ren, const Button& b, Uint8 alpha);
 
     // Return the action of the button under (x, y), or Action::None.
     static Action hitTest(const std::vector<Button>& buttons, int x, int y);

@@ -11,7 +11,6 @@
 #include "config.hpp"
 #include "filters.hpp"
 #include "gallery.hpp"
-#include "recorder.hpp"
 #include "types.hpp"
 #include "ui.hpp"
 
@@ -34,13 +33,15 @@ public:
 private:
     // --- display helpers ---
     bool initDisplay();
-    void renderMat(const cv::Mat& mat); // letterboxed blit of a BGR frame
+    // Letterboxed blit of a BGR frame, optionally rotated clockwise (0/90/180/270).
+    void renderMat(const cv::Mat& mat, int rotate = 0);
     // Upload a camera frame (native NV12 or BGR) and blit it letterboxed into
     // the view. `src` (in image pixels) selects the region to show, so digital
     // zoom is a GPU crop-and-scale; null shows the whole image. For NV12 the
-    // GPU performs the YUV->RGB conversion.
+    // GPU performs the YUV->RGB conversion. `rotate` (0/90/180/270 clockwise)
+    // spins just the image on the GPU, independent of the whole-UI rotation.
     void blitCamera(const cv::Mat& frame, PixelFormat fmt, int imgW, int imgH,
-                    const SDL_Rect* src);
+                    const SDL_Rect* src, int rotate = 0);
     void beginFrame();                  // target the offscreen (logical) canvas
     void present();                     // blit the canvas to the panel, rotated
     void clear();
@@ -69,11 +70,6 @@ private:
 
     // --- actions ---
     void capturePhoto();
-    void toggleRecording();
-    // Toggle the live source between the Pi camera and a USB webcam. Opens the
-    // other source before dropping the current one, so a failed switch (e.g. no
-    // USB camera plugged in) leaves the running camera untouched.
-    void switchCamera();
     void playCurrentVideo();
     void goHome();          // leave the camera for the welcome screen
     void enterSleep();      // blank the screen (and power the panel off on a Pi)
@@ -97,7 +93,6 @@ private:
     Config cfg_;
     std::unique_ptr<Camera> cam_;
     std::unique_ptr<Gallery> gallery_;
-    Recorder recorder_;
     Menu menu_;
     FaceFilter faceFilter_;
 
@@ -125,11 +120,6 @@ private:
     Filter filter_ = Filter::None;
     double filterPhase_ = 0.0;      // free-running counter for tear animation
     Uint32 filterLabelUntil_ = 0;   // show the filter name briefly after a change
-
-    // Brief on-screen banner naming the source after a camera switch (or the
-    // reason a switch failed).
-    std::string cameraLabel_;
-    Uint32 cameraLabelUntil_ = 0;
 
     cv::Mat lastNative_;       // most recent live frame, camera-native format
     cv::Mat filteredNative_;   // NV12 copy with the face region reshaped in place

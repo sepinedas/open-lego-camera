@@ -55,6 +55,8 @@ static void printUsage(const char* prog) {
         "  --size WxH                   requested preview size (default: 1280x720)\n"
         "  --rotate 0|90|180|270        rotate the whole UI (preview + buttons)\n"
         "                               to match a rotated panel\n"
+        "  --camera-rotate 0|90|180|270 rotate only the camera image (preview and\n"
+        "                               captures), leaving the buttons in place\n"
         "  --touch-rotate 0|90|180|270  extra touch rotation if the touch panel\n"
         "                               is misaligned from the display\n"
         "                               (e.g. Pimoroni HyperPixel)\n"
@@ -62,7 +64,6 @@ static void printUsage(const char* prog) {
         "  --touch-flip-y               mirror touch vertically\n"
         "  --driver NAME                force SDL video driver (kmsdrm, fbcon, x11)\n"
         "  --windowed                   run in a window instead of fullscreen\n"
-        "  --no-audio                   record video without sound\n"
         "  --face-cascade PATH          Haar face-cascade XML for the facial\n"
         "                               filters (default: system opencv-data)\n"
         "  --help                       show this help\n";
@@ -122,6 +123,14 @@ bool parseArgs(int argc, char** argv, Config& out, int* exitCode) {
                 std::cerr << "bad --rotate (0|90|180|270): " << v << "\n";
                 *exitCode = 2; return false;
             }
+        } else if (a == "--camera-rotate") {
+            const char* v = need(i); if (!v) return false;
+            out.cameraRotate = std::atoi(v);
+            if (out.cameraRotate != 0 && out.cameraRotate != 90 &&
+                out.cameraRotate != 180 && out.cameraRotate != 270) {
+                std::cerr << "bad --camera-rotate (0|90|180|270): " << v << "\n";
+                *exitCode = 2; return false;
+            }
         } else if (a == "--touch-rotate") {
             const char* v = need(i); if (!v) return false;
             out.touchRotate = std::atoi(v);
@@ -144,8 +153,6 @@ bool parseArgs(int argc, char** argv, Config& out, int* exitCode) {
             out.driver = v;
         } else if (a == "--windowed") {
             out.windowed = true;
-        } else if (a == "--no-audio") {
-            out.audio = false;
         } else if (a == "--face-cascade") {
             const char* v = need(i); if (!v) return false;
             out.faceCascade = v;

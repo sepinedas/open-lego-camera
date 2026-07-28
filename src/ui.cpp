@@ -24,9 +24,9 @@ std::vector<Button> row(const std::vector<Action>& actions, int sw, int sh) {
     // row (pitch = 2r + gap, gap = r  ->  total width = r*(3n-1)) fits across the
     // width with a small margin. This keeps all buttons on-screen in both
     // landscape and rotated (portrait) layouts.
-    int r = std::max(24, std::min(sw, sh) / 14);
+    int r = std::max(28, std::min(sw, sh) / 12);
     int rFit = (int)(0.96 * sw / (3 * n - 1));
-    r = std::max(16, std::min(r, rFit));
+    r = std::max(18, std::min(r, rFit));
 
     int gap = r;
     int pitch = 2 * r + gap;
@@ -61,10 +61,10 @@ std::vector<Button> Menu::layout(Mode mode, int sw, int sh, bool hasVideo) const
                     {Action::Sleep, sw / 2 + dx, y, r}};
         }
         case Mode::Camera:
-            // Zoom is pinch-to-zoom (two fingers), so the row is home / switch
-            // camera / filter / gallery / shutter / record.
-            return row({Action::Home, Action::SwitchCamera, Action::CycleFilter,
-                        Action::OpenGallery, Action::Shutter, Action::Record},
+            // Zoom is pinch-to-zoom (two fingers), so the row is
+            // home / filter / gallery / shutter.
+            return row({Action::Home, Action::CycleFilter,
+                        Action::OpenGallery, Action::Shutter},
                        sw, sh);
         case Mode::Gallery: {
             std::vector<Action> a = {Action::Back, Action::Prev};
@@ -89,13 +89,12 @@ std::vector<Button> Menu::layout(Mode mode, int sw, int sh, bool hasVideo) const
     return {};
 }
 
-void Menu::drawButton(SDL_Renderer* ren, const Button& b, Uint8 alpha,
-                      bool recording) {
+void Menu::drawButton(SDL_Renderer* ren, const Button& b, Uint8 alpha) {
     Uint8 bg = (Uint8)((int)alpha * 42 / 100);   // ~0.42 * alpha
     Uint8 ring = (Uint8)((int)alpha * 28 / 100);
     filledCircleRGBA(ren, b.cx, b.cy, b.r, 18, 18, 24, bg);
     aacircleRGBA(ren, b.cx, b.cy, b.r, 255, 255, 255, ring);
-    drawIcon(ren, b.action, b.cx, b.cy, (int)(b.r * 0.62), alpha, recording);
+    drawIcon(ren, b.action, b.cx, b.cy, (int)(b.r * 0.62), alpha);
 }
 
 Action Menu::hitTest(const std::vector<Button>& buttons, int x, int y) {
