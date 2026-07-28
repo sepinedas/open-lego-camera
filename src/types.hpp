@@ -8,8 +8,7 @@ namespace olc {
 enum class Mode {
     Welcome,       // start screen: Lego-brick camera + Start / Sleep options
     Camera,        // live preview + capture controls
-    Gallery,       // browse captured photos/videos
-    Playback,      // playing a video from the gallery
+    Gallery,       // browse captured photos
     ConfirmDelete, // icon-only yes/no before deleting
     Sleep,         // display blanked (screen off); double-tap to wake
 };
@@ -18,19 +17,16 @@ enum class Mode {
 enum class Action {
     None,
     Shutter,     // take a photo
-    Record,      // start/stop video (with audio when available)
     ZoomIn,
     ZoomOut,
     OpenGallery, // camera -> gallery
     Back,        // gallery -> camera
     Prev,        // previous item in gallery
     Next,        // next item in gallery
-    Play,        // play the selected video
     Delete,      // ask to delete the selected item
     ConfirmYes,  // confirm deletion
     ConfirmNo,   // cancel deletion
     CycleFilter, // cycle the live facial-expression filter
-    SwitchCamera,// toggle between the Pi camera and a USB webcam
     StartCamera, // welcome -> live camera
     Sleep,       // welcome -> blank the screen (display sleep)
     Home,        // camera -> welcome screen

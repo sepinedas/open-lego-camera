@@ -6,7 +6,6 @@
 #include <vector>
 
 #include <opencv2/core.hpp>
-#include <opencv2/objdetect.hpp>
 
 #include "landmarks.hpp"
 #include "mp_landmarker.hpp"
@@ -23,49 +22,36 @@ namespace olc {
 // the falling tears of the crying filter.
 //
 // The reshaping is driven by a small set of facial anchor points (FaceLandmarks)
-// from one of two detectors:
-//
-//   * MediaPipe's Face Mesh (setLandmarker), which pins the warp to the real
-//     mouth corners, lips, brows and eyes from the 468-point mesh -- so the
-//     grin follows your actual mouth (any size, any head tilt) and the tears
-//     well from your real eyes. This is the higher-quality path, built against
-//     the aarch64 MediaPipe artifacts from media-pipe-builder.
-//   * a stock OpenCV Haar cascade (objdetect) as the always-available fallback,
-//     which approximates the same anchor points from the face box. Lower
-//     fidelity, but needs no model file, so the filters still work everywhere.
+// from MediaPipe's 468-point Face Mesh (see mp_landmarker), so the warp is
+// pinned to the real mouth corners, lips, brows and eyes -- the grin follows
+// your actual mouth (any size, any head tilt) and the tears well from your real
+// eyes. The mesh needs the aarch64 MediaPipe library from media-pipe-builder
+// plus a face_landmarker.task model at runtime; without a model the filters are
+// inert (the preview still runs).
 class FaceFilter {
 public:
-    // Loads the frontal-face cascade from the usual system locations.
-    FaceFilter();
+    FaceFilter() = default;
 
-    // Point the Haar detector at an explicit cascade XML (from --face-cascade).
-    // Empty is a no-op; a bad path leaves any already-loaded cascade in place.
-    void setCascade(const std::string& path);
-
-    // Enable the MediaPipe Face Mesh backend from a `.task` model bundle (from
-    // --face-landmarker). When it loads, detection uses the precise mesh; on
-    // failure (or when MediaPipe is not compiled in) the cascade stays in use.
-    // Returns true if the mesh backend is now active.
+    // Load the MediaPipe Face Mesh from a `.task` model bundle (from
+    // --face-landmarker or a default location). Returns true once the mesh is
+    // ready. A failed load leaves the filters inert.
     bool setLandmarker(const std::string& modelPath, int maxFaces = 1);
 
-    // True when the precise MediaPipe mesh backend is active.
-    bool usesLandmarker() const { return mp_ != nullptr; }
-
-    // True once some detector (mesh or cascade) is available.
-    bool ready() const { return mp_ != nullptr || loaded_; }
+    // True once the mesh model is loaded and filtering can do something.
+    bool ready() const { return mp_ != nullptr; }
 
     // Apply `filter` to `frame` (BGR, 8-bit, 3-channel) in place. `phase` is a
     // free-running per-frame counter that drives the tear animation. A no-op
-    // when the filter is None, no detector is available, or no face is found.
+    // when the filter is None, no model is loaded, or no face is found.
     void apply(cv::Mat& frame, Filter filter, double phase);
 
     // --- region-limited API (keeps the NV12 preview off the CPU convert) ---
     //
     // Refresh the detected faces from a full NV12 native buffer (Y plane over a
-    // 2x2-subsampled UV plane, `h` luma rows). The cascade reads the Y plane
-    // directly; the mesh backend converts just the frames it samples to colour.
-    // Honours the detect-every-N-frames cadence internally; call once per frame.
-    void updateDetectionNV12(const cv::Mat& nv12, int h);
+    // 2x2-subsampled UV plane, `h` luma rows). The mesh needs colour, so on the
+    // frames it samples this converts a downscaled copy for inference. Honours
+    // the detect-every-N-frames cadence internally; call once per frame.
+    void updateDetectionNV12(const cv::Mat& nv12);
 
     // The single frame-space rectangle covering everything `filter` will modify
     // for the currently-detected faces (face boxes + margin for the warp and
@@ -79,9 +65,8 @@ public:
     void applyRegion(cv::Mat& roi, cv::Point origin, Filter filter, double phase);
 
 private:
-    bool ensureReady();                          // log-once "no detector" guard
-    void detectLuma(const cv::Mat& luma);        // cascade -> landmarks_ (approx)
-    void detectColor(const cv::Mat& bgr);        // mesh -> landmarks_ (precise)
+    bool ensureReady();                          // log-once "no model" guard
+    void detectColor(const cv::Mat& bgr);        // mesh -> landmarks_
 
     void applySmile(cv::Mat& frame, const FaceLandmarks& face);
     void applyCry(cv::Mat& frame, const FaceLandmarks& face, double phase);
@@ -94,13 +79,11 @@ private:
     // Draw the falling tears of the crying filter.
     void drawTears(cv::Mat& frame, const FaceLandmarks& face, double phase) const;
 
-    cv::CascadeClassifier face_;
-    bool loaded_ = false;                // Haar cascade loaded
-    bool warned_ = false;                // "no detector" logged only once
+    bool warned_ = false;                // "no model" logged only once
     int frameCount_ = 0;                 // detection runs every few frames
     std::vector<FaceLandmarks> landmarks_;  // last detection, full-res coords
 
-    std::unique_ptr<MpFaceLandmarker> mp_;  // null unless the mesh is active
+    std::unique_ptr<MpFaceLandmarker> mp_;  // null until a model is loaded
     int64_t videoTs_ = 0;                   // monotonic ms for video-mode tracking
 };
 

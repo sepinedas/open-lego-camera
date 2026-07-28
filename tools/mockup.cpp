@@ -29,7 +29,7 @@ static void drawFakePreview(SDL_Renderer* r, int w, int h) {
     SDL_RenderFillRect(r, &box);
 }
 
-static cv::Mat renderMode(Mode mode, int w, int h, bool hasVideo, bool recording) {
+static cv::Mat renderMode(Mode mode, int w, int h) {
     SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_ARGB8888);
     SDL_Renderer* r = SDL_CreateSoftwareRenderer(surf);
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
@@ -40,8 +40,8 @@ static cv::Mat renderMode(Mode mode, int w, int h, bool hasVideo, bool recording
 
     Menu menu;
     menu.wake();
-    for (const auto& b : menu.layout(mode, w, h, hasVideo))
-        Menu::drawButton(r, b, mode == Mode::ConfirmDelete ? 255 : menu.alpha(), recording);
+    for (const auto& b : menu.layout(mode, w, h))
+        Menu::drawButton(r, b, mode == Mode::ConfirmDelete ? 255 : menu.alpha());
 
     cv::Mat out = surfaceToMat(surf);
     SDL_DestroyRenderer(r);
@@ -54,21 +54,21 @@ int main() {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) { SDL_Log("init: %s", SDL_GetError()); return 1; }
     const int W = 800, H = 480; // a common Pi touchscreen resolution
 
-    cv::Mat cam = renderMode(Mode::Camera, W, H, false, false);
-    cv::Mat rec = renderMode(Mode::Camera, W, H, false, true);
-    cv::Mat gal = renderMode(Mode::Gallery, W, H, true, false);
-    cv::Mat con = renderMode(Mode::ConfirmDelete, W, H, false, false);
+    cv::Mat cam = renderMode(Mode::Camera, W, H);
+    cv::Mat gal = renderMode(Mode::Gallery, W, H);
+    cv::Mat con = renderMode(Mode::ConfirmDelete, W, H);
+    cv::Mat wel = renderMode(Mode::Welcome, W, H);
 
     auto label = [](cv::Mat& m, const std::string& t) {
         cv::putText(m, t, {16, 34}, cv::FONT_HERSHEY_SIMPLEX, 0.7, {255, 255, 255}, 2);
     };
     label(cam, "CAMERA");
-    label(rec, "RECORDING");
-    label(gal, "GALLERY (video)");
+    label(wel, "WELCOME");
+    label(gal, "GALLERY");
     label(con, "CONFIRM DELETE");
 
     cv::Mat top, bot, sheet;
-    cv::hconcat(cam, rec, top);
+    cv::hconcat(cam, wel, top);
     cv::hconcat(gal, con, bot);
     cv::vconcat(top, bot, sheet);
     cv::imwrite("/home/user/open-lego-camera-cpp/build/ui-mockup.png", sheet);

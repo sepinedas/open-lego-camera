@@ -5,9 +5,9 @@
 
 namespace olc {
 
-// Lists and navigates captured media (.jpg photos and .mp4 videos) in the
-// output directory. Files are timestamp-named, so a plain name sort is
-// chronological; newest is shown first.
+// Lists and navigates captured photos (.jpg/.jpeg/.png) in the output
+// directory. Files are timestamp-named, so a plain name sort is chronological;
+// newest is shown first.
 class Gallery {
 public:
     explicit Gallery(std::string dir) : dir_(std::move(dir)) { refresh(); }
@@ -20,15 +20,12 @@ public:
     int index() const { return index_; }
 
     const std::string& current() const { return files_[index_]; }
-    bool currentIsVideo() const;
 
     void next();
     void prev();
 
     // Delete the current file from disk and re-scan. No-op when empty.
     void deleteCurrent();
-
-    static bool isVideo(const std::string& path);
 
 private:
     std::string dir_;

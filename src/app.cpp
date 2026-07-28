@@ -20,7 +20,6 @@
 namespace olc {
 
 App::~App() {
-    if (recorder_.recording()) recorder_.stop();
     if (tex_) SDL_DestroyTexture(tex_);
     if (canvas_) SDL_DestroyTexture(canvas_);
     if (thumbTex_) SDL_DestroyTexture(thumbTex_);
@@ -204,21 +203,18 @@ void App::drawText(int x, int topY, const std::string& s, int scale,
     SDL_DestroyTexture(t);
 }
 
-// Newest photo/video in the output dir (timestamp names sort chronologically).
+// Newest photo in the output dir (timestamp names sort chronologically).
 static std::string newestMedia(const std::string& dir) {
     std::string best;
     if (DIR* d = ::opendir(dir.c_str())) {
         while (dirent* e = ::readdir(d)) {
             std::string n = e->d_name;
-            if (n.find(".video.mp4") != std::string::npos) continue; // mux temp
-            if (n.find(".audio.wav") != std::string::npos) continue;
             auto ends = [&](const char* x) {
                 std::string s(x);
                 return n.size() > s.size() &&
                        n.compare(n.size() - s.size(), s.size(), s) == 0;
             };
-            if (ends(".jpg") || ends(".jpeg") || ends(".png") || ends(".mp4") ||
-                ends(".avi") || ends(".mov")) {
+            if (ends(".jpg") || ends(".jpeg") || ends(".png")) {
                 if (n > best) best = n; // lexicographic == chronological here
             }
         }
@@ -237,13 +233,7 @@ void App::refreshThumbnail() {
     }
     if (path == thumbPath_ && thumbTex_) return;
 
-    cv::Mat img;
-    if (Gallery::isVideo(path)) {
-        cv::VideoCapture vc(path);
-        if (vc.isOpened()) vc.read(img);
-    } else {
-        img = cv::imread(path, cv::IMREAD_COLOR);
-    }
+    cv::Mat img = cv::imread(path, cv::IMREAD_COLOR);
     if (img.empty()) return;
 
     // Centre-crop to a square, then downscale.
@@ -266,7 +256,7 @@ void App::refreshThumbnail() {
 // falling back to the framed-landscape icon when nothing has been captured.
 void App::drawGalleryButton(const Button& b, Uint8 alpha) {
     if (!thumbTex_) {
-        Menu::drawButton(ren_, b, alpha, false);
+        Menu::drawButton(ren_, b, alpha);
         return;
     }
     int s = b.r;
@@ -391,20 +381,23 @@ bool App::init(const Config& cfg) {
               << "x" << cam_->height() << " @ " << cam_->fps() << "fps\n";
 
     gallery_ = std::make_unique<Gallery>(cfg_.outputDir);
-    if (!cfg_.faceCascade.empty()) faceFilter_.setCascade(cfg_.faceCascade);
-    // Prefer the precise MediaPipe Face Mesh when a model is supplied; the Haar
-    // cascade stays loaded as the fallback if the mesh can't be brought up.
-    if (!cfg_.faceLandmarker.empty()) {
-        if (faceFilter_.setLandmarker(cfg_.faceLandmarker))
-            std::cout << "filters: using MediaPipe Face Mesh for facial filters\n";
-        else
-            std::cerr << "filters: MediaPipe landmarker unavailable; falling back "
-                         "to the Haar cascade\n";
+    // Load the MediaPipe Face Mesh model: an explicit --face-landmarker wins,
+    // otherwise try the usual install locations. The camera still runs without a
+    // model; the facial filters just stay inert.
+    std::vector<std::string> modelPaths;
+    if (!cfg_.faceLandmarker.empty()) modelPaths.push_back(cfg_.faceLandmarker);
+    modelPaths.push_back("/opt/mediapipe/models/face_landmarker.task");
+    modelPaths.push_back("/usr/share/mediapipe/face_landmarker.task");
+    modelPaths.push_back("face_landmarker.task");
+    for (const std::string& p : modelPaths) {
+        if (faceFilter_.setLandmarker(p)) {
+            std::cout << "filters: MediaPipe Face Mesh loaded from " << p << "\n";
+            break;
+        }
     }
     if (!faceFilter_.ready())
-        std::cerr << "filters: no face detector found; facial filters disabled "
-                     "(install `opencv-data`, pass --face-cascade, or build with "
-                     "MediaPipe and pass --face-landmarker)\n";
+        std::cerr << "filters: no face_landmarker.task model found; facial "
+                     "filters disabled (pass --face-landmarker PATH)\n";
     refreshThumbnail();
     menu_.wake();
     return true;
@@ -558,13 +551,13 @@ void App::onTap(int x, int y) {
     if (mode_ == Mode::Welcome) {
         // Welcome buttons are always shown, so a tap acts immediately.
         menu_.wake();
-        auto btns = menu_.layout(Mode::Welcome, viewW_, viewH_, false);
+        auto btns = menu_.layout(Mode::Welcome, viewW_, viewH_);
         dispatch(Menu::hitTest(btns, x, y));
         return;
     }
 
     if (mode_ == Mode::ConfirmDelete) {
-        auto btns = menu_.layout(mode_, viewW_, viewH_, false);
+        auto btns = menu_.layout(mode_, viewW_, viewH_);
         Action a = Menu::hitTest(btns, x, y);
         dispatch(a == Action::ConfirmYes ? Action::ConfirmYes : Action::ConfirmNo);
         return;
@@ -575,15 +568,13 @@ void App::onTap(int x, int y) {
     menu_.wake();
     if (!wasAwake) return;
 
-    bool hasVideo = gallery_ && !gallery_->empty() && gallery_->currentIsVideo();
-    auto btns = menu_.layout(mode_, viewW_, viewH_, hasVideo);
+    auto btns = menu_.layout(mode_, viewW_, viewH_);
     dispatch(Menu::hitTest(btns, x, y));
 }
 
 void App::dispatch(Action a) {
     switch (a) {
         case Action::Shutter:     capturePhoto(); break;
-        case Action::Record:      toggleRecording(); break;
         case Action::ZoomIn:      cam_->zoomIn(); break;
         case Action::ZoomOut:     cam_->zoomOut(); break;
         case Action::OpenGallery:
@@ -591,7 +582,6 @@ void App::dispatch(Action a) {
         case Action::Back:        mode_ = Mode::Camera; break;
         case Action::Prev:        gallery_->prev(); break;
         case Action::Next:        gallery_->next(); break;
-        case Action::Play:        playCurrentVideo(); break;
         case Action::Delete:
             if (gallery_ && !gallery_->empty()) mode_ = Mode::ConfirmDelete;
             break;
@@ -606,9 +596,6 @@ void App::dispatch(Action a) {
         case Action::CycleFilter:
             filter_ = nextFilter(filter_);
             filterLabelUntil_ = SDL_GetTicks() + 1500;
-            break;
-        case Action::SwitchCamera:
-            switchCamera();
             break;
         case Action::StartCamera:
             mode_ = Mode::Camera;
@@ -660,97 +647,8 @@ void App::capturePhoto() {
     refreshThumbnail();           // update the gallery-button preview
 }
 
-void App::toggleRecording() {
-    if (recorder_.recording()) {
-        recorder_.stop();
-        std::cout << "recording stopped\n";
-        refreshThumbnail();
-    } else if (!lastNative_.empty()) {
-        ensureDir(cfg_.outputDir); // same guard as photos: writer needs the dir
-        std::string path = timestampName("VID", ".mp4");
-        // Recorded frames are the full-size zoomed BGR the camera hands back.
-        cv::Size sz(cam_->width(), cam_->height());
-        if (recorder_.start(path, sz, cam_->fps(), cfg_.audio))
-            std::cout << "recording -> " << path << "\n";
-    }
-}
-
-// Flip the live source between the Pi camera and a USB webcam. The other source
-// is opened into a temporary first; only on success do we swap it in, so if the
-// target isn't present (e.g. no webcam plugged in) the running camera keeps
-// going. Any in-progress recording is stopped first -- it belongs to the old
-// source's geometry -- and the digital zoom resets since the new source may have
-// a different resolution.
-void App::switchCamera() {
-    if (!cam_) return;
-    if (recorder_.recording()) {
-        recorder_.stop();
-        refreshThumbnail();
-    }
-
-    CameraKind target = (cam_->kind() == CameraKind::PiCam) ? CameraKind::Webcam
-                                                            : CameraKind::PiCam;
-    Config c = cfg_;
-    c.camera = target;
-    std::unique_ptr<Camera> next = Camera::open(c);
-
-    cameraLabelUntil_ = SDL_GetTicks() + 1800;
-    if (!next) {
-        cameraLabel_ = (target == CameraKind::Webcam) ? "NO USB CAMERA"
-                                                      : "NO PI CAMERA";
-        std::cerr << "camera switch to "
-                  << (target == CameraKind::Webcam ? "webcam" : "picam")
-                  << " failed; keeping current source\n";
-        return;
-    }
-
-    cam_ = std::move(next);
-    lastNative_.release();      // old-format frame no longer matches the new source
-    cameraLabel_ = (cam_->kind() == CameraKind::PiCam) ? "PI CAMERA" : "USB CAMERA";
-    std::cout << "camera: switched to " << cam_->description() << " "
-              << cam_->width() << "x" << cam_->height() << " @ " << cam_->fps()
-              << "fps\n";
-}
-
-// Blocking playback of the selected video: renders frames at the source fps and
-// returns to the gallery on end, tap or key.
-void App::playCurrentVideo() {
-    if (!gallery_ || gallery_->empty() || !gallery_->currentIsVideo()) return;
-    cv::VideoCapture vc(gallery_->current());
-    if (!vc.isOpened()) return;
-
-    mode_ = Mode::Playback;
-    double fps = vc.get(cv::CAP_PROP_FPS);
-    Uint32 frameMs = (Uint32)(fps > 1.0 ? 1000.0 / fps : 33.0);
-
-    cv::Mat frame;
-    bool stop = false;
-    while (running_ && !stop && vc.read(frame) && !frame.empty()) {
-        Uint32 t0 = SDL_GetTicks();
-        beginFrame();
-        renderMat(frame);
-        present();
-
-        SDL_Event e;
-        while (SDL_PollEvent(&e)) {
-            if (e.type == SDL_QUIT) { running_ = false; stop = true; }
-            else if (e.type == SDL_KEYDOWN || e.type == SDL_MOUSEBUTTONDOWN ||
-                     e.type == SDL_FINGERDOWN) stop = true;
-        }
-        Uint32 dt = SDL_GetTicks() - t0;
-        if (dt < frameMs) SDL_Delay(frameMs - dt);
-    }
-    mode_ = Mode::Gallery;
-    menu_.wake();
-}
-
-// Leave the live camera and return to the welcome screen. Stop any recording
-// first so we never leave a dangling video writer running in the background.
+// Leave the live camera and return to the welcome screen.
 void App::goHome() {
-    if (recorder_.recording()) {
-        recorder_.stop();
-        refreshThumbnail();
-    }
     mode_ = Mode::Welcome;
     menu_.wake();
 }
@@ -820,8 +718,8 @@ void App::renderWelcome() {
     drawLegoCamera(ren_, viewW_ / 2, (int)(viewH_ * 0.42), unit, 255);
 
     // Two always-visible controls with labels beneath them.
-    auto btns = menu_.layout(Mode::Welcome, viewW_, viewH_, false);
-    for (const auto& b : btns) Menu::drawButton(ren_, b, 255, false);
+    auto btns = menu_.layout(Mode::Welcome, viewW_, viewH_);
+    for (const auto& b : btns) Menu::drawButton(ren_, b, 255);
     int lscale = std::max(2, std::min(viewH_ / 220, 3));
     for (const auto& b : btns) {
         const char* label = (b.action == Action::StartCamera) ? "START" : "SLEEP";
@@ -853,26 +751,23 @@ void App::renderCamera() {
     cv::Mat frame;
     if (cam_->read(frame)) lastNative_ = frame; // camera-native, no zoom applied
 
-    const bool recording = recorder_.recording();
     const bool filtering = (filter_ != Filter::None);
     // An NV12 frame can be filtered without a full-frame CPU convert -- only the
     // face region is reshaped and re-encoded, the GPU converts and zooms the
-    // rest (see renderFilteredNV12). A BGR webcam, a renderer without NV12
-    // textures, or recording (which needs the whole frame as BGR to write) all
-    // fall back to converting the full frame.
-    const bool nv12FilterPath = filtering && !recording &&
+    // rest (see renderFilteredNV12). A BGR webcam or a renderer without NV12
+    // textures falls back to converting the full frame.
+    const bool nv12FilterPath = filtering &&
                                 cam_->format() == PixelFormat::NV12 &&
                                 !nv12Unsupported_ && !lastNative_.empty();
 
     beginFrame();
-    if (recording || (filtering && !nv12FilterPath)) {
+    if (filtering && !nv12FilterPath) {
         // Full-resolution BGR: convert, reshape the face, then zoom. The filter
         // runs before the zoom crop, matching the NV12 preview path so a photo
-        // or recording carries exactly the expression shown on screen.
+        // carries exactly the expression shown on screen.
         cv::Mat bgr = cam_->nativeToBGR(lastNative_);
         faceFilter_.apply(bgr, filter_, filterPhase_);
         cam_->cropZoom(bgr);
-        if (recording) recorder_.writeFrame(bgr);
         renderMat(bgr);
     } else if (nv12FilterPath) {
         renderFilteredNV12();
@@ -889,20 +784,14 @@ void App::renderCamera() {
 
     if (filter_ != Filter::None) filterPhase_ += 1.0;
 
-    // Persistent recording indicator (independent of the menu fade).
-    if (recorder_.recording()) {
-        int r = std::max(8, viewH_ / 60);
-        filledCircleRGBA(ren_, 24 + r, 24 + r, r, 235, 60, 60, 235);
-    }
-
     if (menu_.awake()) {
         Uint8 a = menu_.alpha();
-        auto btns = menu_.layout(Mode::Camera, viewW_, viewH_, false);
+        auto btns = menu_.layout(Mode::Camera, viewW_, viewH_);
         for (const auto& b : btns) {
             if (b.action == Action::OpenGallery)
                 drawGalleryButton(b, a); // last-shot thumbnail
             else
-                Menu::drawButton(ren_, b, a, recorder_.recording());
+                Menu::drawButton(ren_, b, a);
         }
     }
 
@@ -934,20 +823,6 @@ void App::renderCamera() {
         drawText(viewW_ / 2, y + pad / 2, name, scale, {255, 255, 255, 240}, true);
     }
 
-    // Source name banner, shown briefly after tapping the switch-camera button.
-    // Sits below the filter banner so the two never overlap.
-    if (now < cameraLabelUntil_ && !cameraLabel_.empty()) {
-        int scale = std::max(2, viewH_ / 200);
-        int tw = 8 * (int)cameraLabel_.size() * scale;
-        int pad = 8 * scale / 2;
-        int y = viewH_ / 6 + 8 * scale + 2 * pad;
-        roundedBoxRGBA(ren_, viewW_ / 2 - tw / 2 - pad, y,
-                       viewW_ / 2 + tw / 2 + pad, y + 8 * scale + pad,
-                       6, 0, 0, 0, 120);
-        drawText(viewW_ / 2, y + pad / 2, cameraLabel_, scale,
-                 {255, 255, 255, 240}, true);
-    }
-
     // Shutter flash: a quick white wash that fades out after a capture.
     if (flashStart_) {
         Uint32 dt = now - flashStart_;
@@ -970,7 +845,7 @@ void App::renderCamera() {
 // forces a full-frame CPU convert every frame.
 void App::renderFilteredNV12() {
     const int W = cam_->width(), H = cam_->height();
-    faceFilter_.updateDetectionNV12(lastNative_, H); // Y plane == luma; colour when meshing
+    faceFilter_.updateDetectionNV12(lastNative_); // mesh converts a downscaled copy
     cv::Rect region = faceFilter_.dirtyRegion(filter_, W, H);
 
     clear();
@@ -998,14 +873,7 @@ void App::ensureGalleryImage() {
     const std::string& path = gallery_->current();
     if (path == galleryShown_ && !galleryMat_.empty()) return;
 
-    if (Gallery::isVideo(path)) {
-        cv::VideoCapture vc(path);
-        cv::Mat first;
-        if (vc.isOpened()) vc.read(first);
-        galleryMat_ = first;
-    } else {
-        galleryMat_ = cv::imread(path, cv::IMREAD_COLOR);
-    }
+    galleryMat_ = cv::imread(path, cv::IMREAD_COLOR);
     galleryShown_ = path;
 }
 
@@ -1017,13 +885,6 @@ void App::renderGallery() {
         clear(); // nothing captured yet: black with just the Back control
     } else {
         renderMat(galleryMat_);
-        // A centred play glyph hints that the current item is a video.
-        if (gallery_->currentIsVideo()) {
-            int r = std::max(30, viewH_ / 10);
-            filledCircleRGBA(ren_, viewW_ / 2, viewH_ / 2, r, 0, 0, 0, 90);
-            drawIcon(ren_, Action::Play, viewW_ / 2, viewH_ / 2,
-                     (int)(r * 0.62), 220, false);
-        }
     }
 
     // Capture date/time, translucent, across the top.
@@ -1042,9 +903,8 @@ void App::renderGallery() {
 
     Uint8 a = menu_.awake() ? menu_.alpha() : (Uint8)0;
     if (a > 0) {
-        bool hasVideo = gallery_->currentIsVideo();
-        auto btns = menu_.layout(Mode::Gallery, viewW_, viewH_, hasVideo);
-        for (const auto& b : btns) Menu::drawButton(ren_, b, a, false);
+        auto btns = menu_.layout(Mode::Gallery, viewW_, viewH_);
+        for (const auto& b : btns) Menu::drawButton(ren_, b, a);
     }
     present();
 }
@@ -1078,14 +938,11 @@ int App::run() {
                 if (!galleryMat_.empty()) renderMat(galleryMat_);
                 else clear();
                 boxRGBA(ren_, 0, 0, viewW_, viewH_, 0, 0, 0, 120);
-                auto btns = menu_.layout(Mode::ConfirmDelete, viewW_, viewH_, false);
-                for (const auto& b : btns) Menu::drawButton(ren_, b, 255, false);
+                auto btns = menu_.layout(Mode::ConfirmDelete, viewW_, viewH_);
+                for (const auto& b : btns) Menu::drawButton(ren_, b, 255);
                 present();
                 break;
             }
-            case Mode::Playback:
-                // Playback runs its own loop in playCurrentVideo(); nothing here.
-                break;
         }
     }
     return 0;

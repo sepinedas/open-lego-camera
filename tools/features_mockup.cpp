@@ -68,9 +68,9 @@ static cv::Mat cameraScene(int W, int H, SDL_Texture* thumb) {
     fakePreview(r, W, H, 0, 0);
 
     Menu menu; menu.wake();
-    for (const auto& b : menu.layout(Mode::Camera, W, H, false)) {
+    for (const auto& b : menu.layout(Mode::Camera, W, H)) {
         if (b.action == Action::OpenGallery) drawGalleryButton(r, b, 255, thumb);
-        else Menu::drawButton(r, b, 255, false);
+        else Menu::drawButton(r, b, 255);
     }
     // zoom label
     const char* z = "2.0x";
@@ -99,8 +99,8 @@ static cv::Mat galleryScene(int W, int H) {
     drawText(r, W / 2, (barH - 8 * scale) / 2, ts, scale, {255, 255, 255, 220}, true);
 
     Menu menu; menu.wake();
-    for (const auto& b : menu.layout(Mode::Gallery, W, H, true))
-        Menu::drawButton(r, b, 255, false);
+    for (const auto& b : menu.layout(Mode::Gallery, W, H))
+        Menu::drawButton(r, b, 255);
 
     cv::Mat out = toMat(surf);
     SDL_DestroyRenderer(r); SDL_FreeSurface(surf);

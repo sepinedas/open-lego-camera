@@ -10,23 +10,13 @@ namespace olc {
 
 namespace {
 
-// Detection is the expensive part, so it runs on a downscaled image and only
-// every few frames; between detections the last landmarks are reused. On a
+// Detection is the expensive part, so the mesh runs on a downscaled image and
+// only every few frames; between detections the last landmarks are reused. On a
 // hand-held selfie camera the face barely moves frame-to-frame, so this is
 // visually seamless while keeping the Pi Zero comfortable.
 constexpr int kDetectEvery = 3;
-constexpr double kDetectWidth = 320.0; // downscale target for cascade detection
 constexpr double kMeshWidth = 256.0;   // downscale target for MediaPipe inference
 constexpr double kTearSpeed = 0.019;   // tear cycle progress per frame (fall speed)
-
-// Candidate locations for the stock frontal-face Haar cascade, in the order we
-// try them. Debian/Raspberry Pi OS ship these in the `opencv-data` package.
-const char* kCascadePaths[] = {
-    "/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml",
-    "/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml",
-    "/usr/local/share/opencv4/haarcascades/haarcascade_frontalface_default.xml",
-    "/usr/share/OpenCV/haarcascades/haarcascade_frontalface_default.xml",
-};
 
 float clamp01(float v) { return v < 0.f ? 0.f : (v > 1.f ? 1.f : v); }
 
@@ -180,70 +170,23 @@ void warpRegion(cv::Mat& img, const std::vector<cv::Point2f>& src,
 
 } // namespace
 
-FaceFilter::FaceFilter() {
-    for (const char* p : kCascadePaths) {
-        if (face_.load(p)) {
-            loaded_ = true;
-            break;
-        }
-    }
-}
-
-void FaceFilter::setCascade(const std::string& path) {
-    if (path.empty()) return;
-    cv::CascadeClassifier c;
-    if (c.load(path)) {
-        face_ = c;
-        loaded_ = true;
-    } else {
-        std::cerr << "filters: could not load face cascade '" << path << "'\n";
-    }
-}
-
 bool FaceFilter::setLandmarker(const std::string& modelPath, int maxFaces) {
     auto mp = MpFaceLandmarker::create(modelPath, maxFaces);
     if (!mp) return false;
     mp_ = std::move(mp);
+    warned_ = false;
     return true;
 }
 
 bool FaceFilter::ensureReady() {
-    if (mp_ || loaded_) return true;
+    if (mp_) return true;
     if (!warned_) {
-        std::cerr << "filters: no face detector available; facial filters "
-                     "disabled. Install `opencv-data` (or pass --face-cascade), "
-                     "or build with MediaPipe and pass --face-landmarker.\n";
+        std::cerr << "filters: no Face Mesh model loaded; facial filters "
+                     "disabled. Install the MediaPipe .deb and a "
+                     "face_landmarker.task model, or pass --face-landmarker.\n";
         warned_ = true;
     }
     return false;
-}
-
-void FaceFilter::detectLuma(const cv::Mat& luma) {
-    // `luma` is already single-channel (a grayscale frame, or an NV12 Y plane),
-    // so unlike a BGR frame it needs no colour conversion before detection.
-    double scale = kDetectWidth / std::max(1, luma.cols);
-    if (scale > 1.0) scale = 1.0;
-    cv::Mat small;
-    if (scale < 1.0)
-        cv::resize(luma, small, cv::Size(), scale, scale, cv::INTER_AREA);
-    else
-        small = luma.clone();
-    cv::equalizeHist(small, small);
-
-    std::vector<cv::Rect> found;
-    int minSide = std::max(24, std::min(small.cols, small.rows) / 6);
-    face_.detectMultiScale(small, found, 1.2, 4, 0, cv::Size(minSide, minSide));
-
-    // Approximate the anchor points from each face box (the cascade gives no
-    // landmarks). Lower fidelity than the mesh, but keeps the filters working.
-    landmarks_.clear();
-    double inv = 1.0 / scale;
-    for (const cv::Rect& r : found) {
-        cv::Rect box((int)std::lround(r.x * inv), (int)std::lround(r.y * inv),
-                     (int)std::lround(r.width * inv),
-                     (int)std::lround(r.height * inv));
-        landmarks_.push_back(landmarksFromBox(box));
-    }
 }
 
 void FaceFilter::detectColor(const cv::Mat& bgr) {
@@ -269,31 +212,19 @@ void FaceFilter::apply(cv::Mat& frame, Filter filter, double phase) {
     if (frame.type() != CV_8UC3) return; // filters assume BGR 8-bit
     if (!ensureReady()) return;
 
-    if (frameCount_ % kDetectEvery == 0) {
-        if (mp_) {
-            detectColor(frame);
-        } else {
-            cv::Mat gray;
-            cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
-            detectLuma(gray);
-        }
-    }
+    if (frameCount_ % kDetectEvery == 0) detectColor(frame);
     ++frameCount_;
 
     applyRegion(frame, {0, 0}, filter, phase);
 }
 
-void FaceFilter::updateDetectionNV12(const cv::Mat& nv12, int h) {
-    if (nv12.empty() || h <= 0 || !ensureReady()) return;
+void FaceFilter::updateDetectionNV12(const cv::Mat& nv12) {
+    if (nv12.empty() || !ensureReady()) return;
     if (frameCount_ % kDetectEvery == 0) {
-        if (mp_) {
-            // Convert to BGR only on the frames we actually sample.
-            cv::Mat bgr;
-            cv::cvtColor(nv12, bgr, cv::COLOR_YUV2BGR_NV12);
-            detectColor(bgr);
-        } else {
-            detectLuma(nv12.rowRange(0, h)); // Y plane == luma
-        }
+        // Convert to BGR only on the frames we actually sample.
+        cv::Mat bgr;
+        cv::cvtColor(nv12, bgr, cv::COLOR_YUV2BGR_NV12);
+        detectColor(bgr);
     }
     ++frameCount_;
 }
@@ -390,12 +321,10 @@ void FaceFilter::applySmile(cv::Mat& frame, const FaceLandmarks& L) {
     const cv::Point2f axis = L.mouthAxis();  // along the mouth (left->right)
     const cv::Point2f up = L.upAxis();       // toward the cheeks/brow
 
-    // Anchor the grin to the real mouth, scaled by its actual width. With the
-    // precise mesh we know exactly where the mouth is, so push a bigger grin;
-    // the approximate cascade box gets the gentler, safer amount.
-    const float k = L.precise() ? 1.3f : 1.0f;
-    const float outD = 0.28f * mw * k;               // corners slide outward
-    const float upD = 0.18f * mw * k;                // ...and lift up the cheeks
+    // Anchor the grin to the real mouth, scaled by its actual width. The mesh
+    // pins the corners exactly, so push a generous grin.
+    const float outD = 0.36f * mw;                   // corners slide outward
+    const float upD = 0.23f * mw;                    // ...and lift up the cheeks
     const float openD = (0.06f + 0.17f * open) * mw; // vertical mouth stretch
 
     std::vector<cv::Point2f> src, dst;
@@ -455,12 +384,11 @@ void FaceFilter::applyCry(cv::Mat& frame, const FaceLandmarks& L, double phase) 
     const cv::Point2f up = L.upAxis();
     const cv::Point2f down = -up;
 
-    const float k = L.precise() ? 1.15f : 1.0f;
-    const float downD = 0.06f * fh * k; // corners sink toward the chin
+    const float downD = 0.069f * fh;    // corners sink toward the chin
     const float inD = 0.10f * mw;       // ...and draw slightly inward
     const float upC = 0.04f * fh;       // philtrum lifts -> deepens the frown
-    const float browDownD = 0.06f * fh * k; // inner brows sink
-    const float browInD = 0.10f * mw * k;   // ...and pinch together
+    const float browDownD = 0.069f * fh; // inner brows sink
+    const float browInD = 0.115f * mw;   // ...and pinch together
 
     std::vector<cv::Point2f> src, dst;
     std::vector<float> sig;

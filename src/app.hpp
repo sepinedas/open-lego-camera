@@ -11,14 +11,13 @@
 #include "config.hpp"
 #include "filters.hpp"
 #include "gallery.hpp"
-#include "recorder.hpp"
 #include "types.hpp"
 #include "ui.hpp"
 
 namespace olc {
 
 // Owns the SDL window/renderer and drives the whole application: live preview,
-// capture, gallery browsing, video playback and delete-confirm, all through the
+// photo capture, gallery browsing and delete-confirm, all through the
 // translucent auto-hiding icon menu.
 class App {
 public:
@@ -69,12 +68,6 @@ private:
 
     // --- actions ---
     void capturePhoto();
-    void toggleRecording();
-    // Toggle the live source between the Pi camera and a USB webcam. Opens the
-    // other source before dropping the current one, so a failed switch (e.g. no
-    // USB camera plugged in) leaves the running camera untouched.
-    void switchCamera();
-    void playCurrentVideo();
     void goHome();          // leave the camera for the welcome screen
     void enterSleep();      // blank the screen (and power the panel off on a Pi)
     void wakeFromSleep();   // restore the display and return to the welcome screen
@@ -97,7 +90,6 @@ private:
     Config cfg_;
     std::unique_ptr<Camera> cam_;
     std::unique_ptr<Gallery> gallery_;
-    Recorder recorder_;
     Menu menu_;
     FaceFilter faceFilter_;
 
@@ -125,11 +117,6 @@ private:
     Filter filter_ = Filter::None;
     double filterPhase_ = 0.0;      // free-running counter for tear animation
     Uint32 filterLabelUntil_ = 0;   // show the filter name briefly after a change
-
-    // Brief on-screen banner naming the source after a camera switch (or the
-    // reason a switch failed).
-    std::string cameraLabel_;
-    Uint32 cameraLabelUntil_ = 0;
 
     cv::Mat lastNative_;       // most recent live frame, camera-native format
     cv::Mat filteredNative_;   // NV12 copy with the face region reshaped in place

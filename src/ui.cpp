@@ -49,7 +49,7 @@ Uint8 Menu::alpha() const {
     return 0;
 }
 
-std::vector<Button> Menu::layout(Mode mode, int sw, int sh, bool hasVideo) const {
+std::vector<Button> Menu::layout(Mode mode, int sw, int sh) const {
     switch (mode) {
         case Mode::Welcome: {
             // Two big labelled buttons low on the screen: Start / Sleep. Sized
@@ -61,18 +61,14 @@ std::vector<Button> Menu::layout(Mode mode, int sw, int sh, bool hasVideo) const
                     {Action::Sleep, sw / 2 + dx, y, r}};
         }
         case Mode::Camera:
-            // Zoom is pinch-to-zoom (two fingers), so the row is home / switch
-            // camera / filter / gallery / shutter / record.
-            return row({Action::Home, Action::SwitchCamera, Action::CycleFilter,
-                        Action::OpenGallery, Action::Shutter, Action::Record},
+            // Zoom is pinch-to-zoom (two fingers), so the row is
+            // home / filter / gallery / shutter.
+            return row({Action::Home, Action::CycleFilter, Action::OpenGallery,
+                        Action::Shutter},
                        sw, sh);
-        case Mode::Gallery: {
-            std::vector<Action> a = {Action::Back, Action::Prev};
-            if (hasVideo) a.push_back(Action::Play);
-            a.push_back(Action::Next);
-            a.push_back(Action::Delete);
-            return row(a, sw, sh);
-        }
+        case Mode::Gallery:
+            return row({Action::Back, Action::Prev, Action::Next, Action::Delete},
+                       sw, sh);
         case Mode::ConfirmDelete: {
             // Two large, always-visible buttons centred on screen; size off the
             // smaller dimension so both fit side by side in portrait too.
@@ -82,20 +78,18 @@ std::vector<Button> Menu::layout(Mode mode, int sw, int sh, bool hasVideo) const
             return {{Action::ConfirmNo, sw / 2 - dx, y, r},
                     {Action::ConfirmYes, sw / 2 + dx, y, r}};
         }
-        case Mode::Playback:
         case Mode::Sleep:
-            return {}; // Playback: tap to stop. Sleep: double-tap to wake.
+            return {}; // double-tap to wake.
     }
     return {};
 }
 
-void Menu::drawButton(SDL_Renderer* ren, const Button& b, Uint8 alpha,
-                      bool recording) {
+void Menu::drawButton(SDL_Renderer* ren, const Button& b, Uint8 alpha) {
     Uint8 bg = (Uint8)((int)alpha * 42 / 100);   // ~0.42 * alpha
     Uint8 ring = (Uint8)((int)alpha * 28 / 100);
     filledCircleRGBA(ren, b.cx, b.cy, b.r, 18, 18, 24, bg);
     aacircleRGBA(ren, b.cx, b.cy, b.r, 255, 255, 255, ring);
-    drawIcon(ren, b.action, b.cx, b.cy, (int)(b.r * 0.62), alpha, recording);
+    drawIcon(ren, b.action, b.cx, b.cy, (int)(b.r * 0.62), alpha);
 }
 
 Action Menu::hitTest(const std::vector<Button>& buttons, int x, int y) {

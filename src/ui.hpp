@@ -29,14 +29,11 @@ public:
     // True while any part of the menu is still visible.
     bool awake() const { return alpha() > 0; }
 
-    // Build the button set for a mode. `hasVideo` adds a Play button in the
-    // gallery only when the selected item is a video.
-    std::vector<Button> layout(Mode mode, int screenW, int screenH,
-                               bool hasVideo) const;
+    // Build the button set for a mode.
+    std::vector<Button> layout(Mode mode, int screenW, int screenH) const;
 
     // Draw one button (translucent disc + icon) at the given menu alpha.
-    static void drawButton(SDL_Renderer* ren, const Button& b, Uint8 alpha,
-                           bool recording);
+    static void drawButton(SDL_Renderer* ren, const Button& b, Uint8 alpha);
 
     // Return the action of the button under (x, y), or Action::None.
     static Action hitTest(const std::vector<Button>& buttons, int x, int y);

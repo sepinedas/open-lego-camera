@@ -1,13 +1,11 @@
 # open-lego-camera-cpp
 
 A touch-friendly, **icon-only** camera app for the **Raspberry Pi Zero 2 W**
-(or any Linux box with a webcam), written in **C++17**.
+(or any Linux box with a webcam), written in **C++20**.
 
 - Works with the **Raspberry Pi camera module** (via libcamera / GStreamer) or
-  any **USB webcam** (via V4L2) — auto-detected at startup, and switchable
-  **live** with the **switch-camera** button (the two-arrows-around-a-camera
-  icon) so you can flip between the Pi camera and a USB camera without
-  restarting.
+  any **USB webcam** (via V4L2), auto-detected at startup (pick one explicitly
+  with `--camera`).
 - Runs on a **headless Raspberry Pi** with **no desktop, X11 or Wayland** — it
   draws straight to the **HDMI** output through DRM/KMS (SDL2's `kmsdrm`
   driver, selected automatically).
@@ -19,23 +17,23 @@ A touch-friendly, **icon-only** camera app for the **Raspberry Pi Zero 2 W**
 - Fullscreen live preview with a **translucent, auto-hiding menu**: a few
   seconds after your last tap the menu fades away; tap anywhere to bring it
   back.
-- Menu buttons are **translucent icons, no text**: home, switch-camera, filter,
-  gallery, shutter, record.
+- Menu buttons are **translucent icons, no text**: home, filter, gallery,
+  shutter.
 - **Pinch-to-zoom** with two fingers (digital, up to 4×); the magnification
   factor (e.g. `2.0x`) shows briefly while zooming.
 - A **shutter-flash animation** plays when a photo is taken, and the **gallery
-  button shows a thumbnail** of the most recent photo/video.
-- **Video recording with sound** when a microphone is present (mux via
-  `ffmpeg`); disable with `--no-audio`.
-- Built-in **gallery**: browse captured photos and videos, **play** videos
-  back, and **delete** them behind an icon-only ✓ / ✗ confirmation. The
-  capture **date & time** is shown translucent across the top.
+  button shows a thumbnail** of the most recent photo.
+- Built-in **gallery**: browse captured photos and **delete** them behind an
+  icon-only ✓ / ✗ confirmation. The capture **date & time** is shown translucent
+  across the top.
 - **WhatsApp-style facial filters** (smiley button): a **Big Smile** that
   stretches your mouth into a wide grin — with your teeth brightening as you
   open it — and a **Crying** face that pulls your mouth and brows into a frown
   and adds animated falling **tears**. The face is *reshaped in place* (its own
   pixels warped), not covered with cartoon graphics — only the tears are drawn
-  on top. Applies live to the preview and to captured photos/videos.
+  on top. The warp is driven by **MediaPipe's 468-point Face Mesh**, so it
+  tracks your real mouth, brows and eyes. Applies live to the preview and to
+  captured photos.
 
 ![Welcome screen](docs/welcome-screen.png)
 
@@ -50,13 +48,13 @@ A touch-friendly, **icon-only** camera app for the **Raspberry Pi Zero 2 W**
 | Requirement | How |
 | --- | --- |
 | Welcome screen with a Lego-brick camera; Start / Sleep options | `Mode::Welcome` draws `drawLegoCamera` (bricks + lens in `icons.cpp`); Sleep blanks the panel via `vcgencmd display_power` and wakes on a double-tap |
-| Runs with a webcam **or** Pi camera | `Camera` auto-detects: libcamera (GStreamer) first, then V4L2 webcam; the switch-camera button toggles between the two at runtime (`App::switchCamera`) |
-| Written in C++ | C++17, CMake build |
+| Runs with a webcam **or** Pi camera | `Camera` auto-detects: libcamera (GStreamer) first, then V4L2 webcam (`--camera` to force one) |
+| Written in C++ | C++20, CMake build |
 | Translucent, auto-hiding menu | `Menu` fades the icon row out ~3.5 s after the last tap; any tap wakes it |
-| Photos, video **with audio**, zoom, gallery, delete | shutter / record / gallery icons; pinch-to-zoom; `arecord`+`ffmpeg` mux audio |
+| Photos, zoom, gallery, delete | shutter / gallery icons; pinch-to-zoom; icon-only delete confirm |
 | Icon-only buttons, no text | all icons are drawn as vector shapes (`icons.cpp`, SDL2_gfx) |
 | Headless — no X11 / window manager | SDL2 `kmsdrm`/`fbcon` renders directly to HDMI |
-| WhatsApp-style facial filters | `FaceFilter` locates facial landmarks (MediaPipe Face Mesh when built in, else a Haar-cascade approximation) and warps the mouth/brows with `cv::remap`; the crying filter also draws tears (`filters.cpp`, `landmarks.hpp`, `mp_landmarker.cpp`) |
+| WhatsApp-style facial filters | `FaceFilter` locates facial landmarks with MediaPipe's Face Mesh and warps the mouth/brows with `cv::remap`; the crying filter also draws tears (`filters.cpp`, `landmarks.hpp`, `mp_landmarker.cpp`) |
 
 ## Dependencies
 
@@ -68,33 +66,16 @@ sudo apt install build-essential cmake pkg-config \
                  libsdl2-dev libsdl2-gfx-dev libopencv-dev
 ```
 
-Optional, for **video sound**: `ffmpeg` (muxing) and `alsa-utils` (`arecord`):
+### MediaPipe Face Mesh (required)
 
-```sh
-sudo apt install ffmpeg alsa-utils
-```
+The facial filters are driven by **MediaPipe's 468-point Face Mesh**, which pins
+the smile/cry warp to your **real** mouth corners, lips, brows and eyes — the
+grin follows your actual mouth at any size and head tilt, and the tears well from
+your real eyes. MediaPipe is a **hard dependency**: the app links
+`libmediapipe_tasks` and won't configure without it. (The camera itself still
+runs if you launch without a *model* file; the filters just stay inert.)
 
-The **facial filters** need OpenCV's `objdetect` module (part of `libopencv-dev`
-above) and its bundled Haar cascades, which Debian/Raspberry Pi OS ship in the
-`opencv-data` package:
-
-```sh
-sudo apt install opencv-data
-```
-
-If the cascade lives somewhere non-standard, point the app at it with
-`--face-cascade /path/to/haarcascade_frontalface_default.xml`. Without a
-cascade the app still runs — the facial filters simply stay inactive.
-
-#### Higher-quality filters with MediaPipe (optional)
-
-The Haar cascade only gives a face *box*, so the smile/cry warps are anchored by
-fixed proportions of that box. For a noticeably better result you can build with
-the **MediaPipe Face Mesh** backend, which pins the warp to the **real** mouth
-corners, lips, brows and eyes (468-point mesh): the grin follows your actual
-mouth at any size and head tilt, and the tears well from your real eyes.
-
-It links against the prebuilt aarch64 MediaPipe artifacts from
+It uses the prebuilt aarch64 MediaPipe artifacts from
 [**media-pipe-builder**](https://github.com/sepinedas/media-pipe-builder). Use a
 release whose `include/` bundles the pinned dependency headers (Abseil, protobuf,
 Eigen, flatbuffers, glog) — MediaPipe's headers `#include` them and they can't be
@@ -111,14 +92,16 @@ sudo curl -L -o /opt/mediapipe/models/face_landmarker.task \
   https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
 ```
 
-Then configure the build with `-DWITH_MEDIAPIPE=ON` (CMake auto-detects the
-newest `/opt/mediapipe/<ver>`; override with `-DMEDIAPIPE_ROOT=…`), and run with
-`--face-landmarker`:
+CMake auto-detects the newest `/opt/mediapipe/<ver>` (override with
+`-DMEDIAPIPE_ROOT=…`). The app searches the usual locations for
+`face_landmarker.task` at startup, including
+`/opt/mediapipe/models/face_landmarker.task`; point it elsewhere with
+`--face-landmarker PATH`.
 
 ```sh
-cmake -B build -DWITH_MEDIAPIPE=ON
+cmake -B build
 cmake --build build -j1        # -j1 on the Pi Zero 2 W -- see the note below
-build/open-lego-camera --face-landmarker /opt/mediapipe/models/face_landmarker.task
+build/open-lego-camera
 ```
 
 > **Building on a 512 MB Pi Zero 2 W.** The one file that includes MediaPipe's
@@ -137,11 +120,6 @@ build/open-lego-camera --face-landmarker /opt/mediapipe/models/face_landmarker.t
 > - or simply **build on a Pi 4 / Pi 5** running the same 64‑bit Raspberry Pi OS
 >   (Bookworm) and copy the binary over — the `arm64` executable is portable
 >   across Pi boards, just like the MediaPipe `.deb`.
-
-Everything degrades gracefully: build without `-DWITH_MEDIAPIPE=ON` (the
-default) and the app is exactly as before; build with it but launch without a
-model — or with a model that fails to load — and it falls back to the Haar
-cascade. So MediaPipe is a pure opt-in quality upgrade, not a new requirement.
 
 For the **Pi camera module** you also need the libcamera GStreamer element,
 which is what lets OpenCV open the camera without a desktop:
@@ -174,19 +152,17 @@ texture — instead of spending a CPU core on a per-frame `videoconvert`. Pinch
 Zero 2 W, where the CPU colour-convert was the frame-rate bottleneck.
 
 A frame is only converted to BGR on the CPU when something actually needs the
-pixels — taking a photo or recording — so the common "just previewing" case
-does no colour conversion or resize on the CPU at all.
+pixels — taking a photo — so the common "just previewing" case does no colour
+conversion or resize on the CPU at all.
 
-The **facial filters** stay on that fast path too. With the Haar cascade, face
-detection runs directly on the NV12 **Y (luma) plane** — which _is_ a grayscale
-image — so it needs no conversion; only the **face region** is converted to BGR,
-reshaped, and re-encoded back into the NV12 frame. The GPU still converts and
-zooms the whole frame, so filtering costs work proportional to the face's size
-on screen rather than a full-frame convert every frame. (A USB webcam, which
-delivers BGR, still converts the whole frame for filters.) The MediaPipe Face
-Mesh backend needs colour, so on the frames it actually samples (every few
-frames, the same detect cadence) it converts a **downscaled** copy for
-inference; the reshape and re-encode still touch only the face region.
+The **facial filters** stay on that fast path too. Only the **face region** is
+converted to BGR, reshaped, and re-encoded back into the NV12 frame; the GPU
+still converts and zooms the whole frame, so filtering costs work proportional to
+the face's size on screen rather than a full-frame convert every frame. MediaPipe
+inference needs colour, so on the frames it actually samples (every few frames, a
+fixed detect cadence) it converts a **downscaled** copy of the frame for the mesh
+and reuses those landmarks in between. (A USB webcam, which delivers BGR, still
+converts the whole frame for filters.)
 
 If the renderer can't sample NV12 textures, or raw NV12 capture won't start, the
 app transparently falls back to converting to BGR with libcamera's
@@ -204,14 +180,8 @@ list the ids with:
 rpicam-hello --list-cameras
 ```
 
-With both a Pi camera and a USB camera connected you don't have to choose up
-front: tap the **switch-camera** button in the live view to flip between them at
-any time. The app opens the *other* source before releasing the current one, so
-if the target isn't present (e.g. no USB camera plugged in) the running camera
-keeps going and a brief **`NO USB CAMERA`** / **`NO PI CAMERA`** banner explains
-why nothing changed. A successful switch shows the new source's name
-(**`PI CAMERA`** / **`USB CAMERA`**), resets the digital zoom, and stops any
-in-progress recording (its video belongs to the old source's resolution).
+The source is chosen once at startup; pass `--camera picam` / `--camera webcam`
+to force it if auto-detection picks the wrong one.
 
 Sanity-check the raw pipeline outside the app with:
 
@@ -224,9 +194,12 @@ If that shows a picture, the app will too.
 
 ## Build
 
+MediaPipe must be installed first (see [MediaPipe Face Mesh
+(required)](#mediapipe-face-mesh-required)).
+
 ```sh
 cmake -B build -S .
-cmake --build build -j
+cmake --build build -j1    # -j1 on the Pi Zero 2 W (the MediaPipe TU is memory-heavy)
 ```
 
 The binary is `build/open-lego-camera`.
@@ -248,9 +221,8 @@ build/open-lego-camera [options]
   --touch-flip-x / --touch-flip-y   mirror touch on an axis
   --driver NAME                force SDL video driver (kmsdrm, fbcon, x11)
   --windowed                   run in a window instead of fullscreen
-  --no-audio                   record video without sound
-  --face-cascade PATH          Haar face-cascade XML for the facial filters
-  --face-landmarker PATH       MediaPipe face_landmarker.task for sharper filters
+  --face-landmarker PATH       MediaPipe face_landmarker.task model
+                               (default: search the usual /opt/mediapipe paths)
   --help                       show this help
 ```
 
@@ -258,7 +230,7 @@ build/open-lego-camera [options]
 
 Tap the **smiley** button in the camera menu to cycle the live
 facial filter: **Big Smile** → **Crying** → off. The active filter's name
-appears briefly on screen, and the effect is baked into any photo or video you
+appears briefly on screen, and the effect is baked into any photo you
 then capture.
 
 - **Big Smile** stretches your mouth's corners up and out into a wide grin and
@@ -268,17 +240,12 @@ then capture.
   and streams animated tears down your cheeks.
 
 Both filters *warp your actual face* — no cartoon mouth or eyes are pasted on
-top; only the crying tears are drawn over the image. Out of the box, faces are
-found with a stock OpenCV Haar cascade, so no landmark model or `opencv_contrib`
-build is required — keeping it light enough for the Pi Zero 2 W.
-
-For sharper results, build with the optional **MediaPipe Face Mesh** backend and
-pass `--face-landmarker /opt/mediapipe/models/face_landmarker.task`. The warp
-then tracks the real 468-point mesh — the grin follows your actual mouth (any
-size, any head tilt) and the tears well from your real eyes — instead of the
-cascade's fixed proportions of the face box. See
-[Higher-quality filters with MediaPipe](#higher-quality-filters-with-mediapipe-optional)
-for the one-time setup.
+top; only the crying tears are drawn over the image. The warp is anchored to
+**MediaPipe's 468-point Face Mesh**, so the grin follows your actual mouth (any
+size, any head tilt) and the tears well from your real eyes. If no
+`face_landmarker.task` model is found, the filters simply stay inert (the preview
+still runs). See [MediaPipe Face Mesh
+(required)](#mediapipe-face-mesh-required) for the one-time setup.
 
 ### Rotating the display
 
@@ -297,8 +264,7 @@ with the display you usually need nothing else. `--touch-rotate` /
 touch controller is mounted rotated/mirrored **relative to the panel** (common
 on the HyperPixel) — reach for them only if taps are still off after `--rotate`.
 
-- Captures are saved as `IMG_YYYYMMDD_HHMMSS.jpg` and
-  `VID_YYYYMMDD_HHMMSS.mp4`.
+- Captures are saved as `IMG_YYYYMMDD_HHMMSS.jpg`.
 - The app opens on the **welcome screen**; tap **Start Camera** to begin or
   **Sleep** to blank the screen (**double-tap** to wake). The **home** icon in
   the camera menu returns here.
@@ -515,12 +481,11 @@ line.
 | camera (welcome) | start the live camera |
 | crescent moon (welcome) | sleep — blank the screen; double-tap to wake |
 | house (camera) | back to the welcome screen |
+| smiley (camera) | cycle the facial filter: Big Smile → Crying → off |
 | last-shot thumbnail (framed-landscape icon until the first capture) | open the gallery |
 | ring with dot | take a photo (plays a shutter flash) |
-| red dot → red square | start recording → stop (turns into a stop square) |
 | chevron (gallery) | back to the camera |
-| ◀ / ▶ triangles (gallery) | previous / next item |
-| triangle-in-ring (gallery) | play the selected video |
+| ◀ / ▶ triangles (gallery) | previous / next photo |
 | trash can (gallery) | delete the shown item (asks ✓ / ✗) |
 | ✓ green / ✗ red | confirm / cancel a delete |
 
@@ -528,31 +493,18 @@ line.
 (digital, up to 4×). The current factor (`1.0x`–`4.0x`) appears briefly at the
 top while you pinch.
 
-## Audio
-
-Videos are recorded **with sound** when a microphone is present (the Pi camera
-module has none — plug in a USB mic or a webcam with one):
-
-- Frames are written by OpenCV's `VideoWriter` (`mp4v`) to a temp file while
-  `arecord` captures a WAV from the default ALSA input.
-- On stop, the two are muxed into the final `.mp4` in the background with
-  `ffmpeg -c:v copy -c:a aac`.
-- If a mic, `arecord` or `ffmpeg` is missing, recording silently falls back to
-  **video-only**. `--no-audio` forces this.
-
 ## Design notes
 
-- **Modules** (`src/`): `camera` (dual backend + digital zoom), `recorder`
-  (video + audio muxing), `gallery` (list/navigate/delete), `icons`
-  (procedural vector icons), `ui` (auto-hide menu, layout, hit-testing), `app`
-  (SDL display, event loop, per-mode rendering), `config` (CLI).
+- **Modules** (`src/`): `camera` (dual backend + digital zoom), `filters` +
+  `landmarks` + `mp_landmarker` (MediaPipe Face Mesh facial filters), `gallery`
+  (list/navigate/delete), `icons` (procedural vector icons), `ui` (auto-hide
+  menu, layout, hit-testing), `app` (SDL display, event loop, per-mode
+  rendering), `config` (CLI).
 - **Zoom** is a uniform centre-crop-and-rescale applied to both preview and
   captures, so behaviour is identical on the Pi camera and a webcam.
 - **Rendering**: each BGR frame is uploaded to a streaming SDL texture and
   letterboxed to the screen; the translucent menu is composited on top with
   alpha blending.
-- Video **playback** decodes frames with OpenCV — no external player needed;
-  tap anywhere to stop.
 
 ## Preview the UI without a Pi
 

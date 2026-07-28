@@ -17,13 +17,8 @@ static bool hasExt(const std::string& name, const char* ext) {
     return lower(name.substr(name.size() - std::string(ext).size())) == ext;
 }
 
-bool Gallery::isVideo(const std::string& path) {
-    return hasExt(path, ".mp4") || hasExt(path, ".avi") || hasExt(path, ".mov");
-}
-
 static bool isMedia(const std::string& name) {
-    return hasExt(name, ".jpg") || hasExt(name, ".jpeg") ||
-           hasExt(name, ".png") || Gallery::isVideo(name);
+    return hasExt(name, ".jpg") || hasExt(name, ".jpeg") || hasExt(name, ".png");
 }
 
 void Gallery::refresh() {
@@ -34,8 +29,6 @@ void Gallery::refresh() {
         while (dirent* e = ::readdir(d)) {
             std::string name = e->d_name;
             if (name == "." || name == "..") continue;
-            if (name.find(".video.mp4") != std::string::npos) continue; // in-progress mux temp
-            if (name.find(".audio.wav") != std::string::npos) continue;
             if (isMedia(name)) files_.push_back(dir_ + "/" + name);
         }
         ::closedir(d);
@@ -51,10 +44,6 @@ void Gallery::refresh() {
         if (it != files_.end()) index_ = static_cast<int>(it - files_.begin());
     }
     if (index_ >= count()) index_ = std::max(0, count() - 1);
-}
-
-bool Gallery::currentIsVideo() const {
-    return !empty() && isVideo(files_[index_]);
 }
 
 void Gallery::next() {

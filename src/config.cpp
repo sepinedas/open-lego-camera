@@ -62,13 +62,9 @@ static void printUsage(const char* prog) {
         "  --touch-flip-y               mirror touch vertically\n"
         "  --driver NAME                force SDL video driver (kmsdrm, fbcon, x11)\n"
         "  --windowed                   run in a window instead of fullscreen\n"
-        "  --no-audio                   record video without sound\n"
-        "  --face-cascade PATH          Haar face-cascade XML for the facial\n"
-        "                               filters (default: system opencv-data)\n"
         "  --face-landmarker PATH       MediaPipe face_landmarker.task model for\n"
-        "                               higher-quality filters (needs a build with\n"
-        "                               -DWITH_MEDIAPIPE=ON); falls back to the\n"
-        "                               Haar cascade when absent\n"
+        "                               the facial filters (default: search the\n"
+        "                               usual /opt/mediapipe locations)\n"
         "  --help                       show this help\n";
 }
 
@@ -148,11 +144,6 @@ bool parseArgs(int argc, char** argv, Config& out, int* exitCode) {
             out.driver = v;
         } else if (a == "--windowed") {
             out.windowed = true;
-        } else if (a == "--no-audio") {
-            out.audio = false;
-        } else if (a == "--face-cascade") {
-            const char* v = need(i); if (!v) return false;
-            out.faceCascade = v;
         } else if (a == "--face-landmarker") {
             const char* v = need(i); if (!v) return false;
             out.faceLandmarker = v;

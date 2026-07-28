@@ -34,8 +34,8 @@ static cv::Mat renderRotated(int screenW, int screenH, int rotate) {
     SDL_SetRenderTarget(r, canvas);
     drawFakePreview(r, viewW, viewH);
     Menu menu; menu.wake();
-    for (const auto& b : menu.layout(Mode::Camera, viewW, viewH, false))
-        Menu::drawButton(r, b, 255, false);
+    for (const auto& b : menu.layout(Mode::Camera, viewW, viewH))
+        Menu::drawButton(r, b, 255);
 
     // Blit rotated onto the panel (identical to App::present()).
     SDL_SetRenderTarget(r, nullptr);

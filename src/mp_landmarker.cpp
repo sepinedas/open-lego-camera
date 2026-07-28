@@ -1,10 +1,5 @@
 #include "mp_landmarker.hpp"
 
-// ---------------------------------------------------------------------------
-// Real MediaPipe backend (compiled only with -DWITH_MEDIAPIPE=ON).
-// ---------------------------------------------------------------------------
-#ifdef OLC_WITH_MEDIAPIPE
-
 #include <algorithm>
 #include <iostream>
 
@@ -54,8 +49,6 @@ struct MpFaceLandmarker::Impl {
 
 MpFaceLandmarker::MpFaceLandmarker() : impl_(std::make_unique<Impl>()) {}
 MpFaceLandmarker::~MpFaceLandmarker() = default;
-
-bool MpFaceLandmarker::available() { return true; }
 
 std::unique_ptr<MpFaceLandmarker> MpFaceLandmarker::create(
         const std::string& modelPath, int maxFaces) {
@@ -110,7 +103,6 @@ bool MpFaceLandmarker::detect(const cv::Mat& bgr, int64_t timestampMs,
         auto pt = [&](int i) { return cv::Point2f(lm[i].x * W, lm[i].y * H); };
 
         FaceLandmarks L;
-        L.mesh = true;
         L.mouthLeft   = pt(kMouthLeft);
         L.mouthRight  = pt(kMouthRight);
         L.mouthTop    = pt(kMouthTop);
@@ -150,32 +142,3 @@ bool MpFaceLandmarker::detect(const cv::Mat& bgr, int64_t timestampMs,
 }
 
 } // namespace olc
-
-// ---------------------------------------------------------------------------
-// Stub backend (MediaPipe not compiled in). create() returns nullptr, so the
-// caller transparently falls back to the Haar cascade.
-// ---------------------------------------------------------------------------
-#else // !OLC_WITH_MEDIAPIPE
-
-namespace olc {
-
-struct MpFaceLandmarker::Impl {};
-
-MpFaceLandmarker::MpFaceLandmarker() = default;
-MpFaceLandmarker::~MpFaceLandmarker() = default;
-
-bool MpFaceLandmarker::available() { return false; }
-
-std::unique_ptr<MpFaceLandmarker> MpFaceLandmarker::create(const std::string&,
-                                                           int) {
-    return nullptr;
-}
-
-bool MpFaceLandmarker::detect(const cv::Mat&, int64_t, float, float,
-                              std::vector<FaceLandmarks>&) {
-    return false;
-}
-
-} // namespace olc
-
-#endif // OLC_WITH_MEDIAPIPE
