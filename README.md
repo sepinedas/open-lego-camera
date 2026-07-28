@@ -119,7 +119,11 @@ build/open-lego-camera
 >   ```
 > - or simply **build on a Pi 4 / Pi 5** running the same 64‑bit Raspberry Pi OS
 >   (Bookworm) and copy the binary over — the `arm64` executable is portable
->   across Pi boards, just like the MediaPipe `.deb`.
+>   across Pi boards, just like the MediaPipe `.deb`. If you copy the binary, the
+>   **target still needs the runtime libraries**: install the MediaPipe `.deb`
+>   *and* OpenCV there too, otherwise you get
+>   `error while loading shared libraries: libopencv_core.so.406` at launch
+>   (`sudo apt install libopencv-dev && sudo ldconfig`).
 
 For the **Pi camera module** you also need the libcamera GStreamer element,
 which is what lets OpenCV open the camera without a desktop:
