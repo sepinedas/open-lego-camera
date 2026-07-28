@@ -651,9 +651,11 @@ void App::capturePhoto() {
     // the preview -- so the saved photo matches what's on screen.
     cv::Mat shot = cam_->nativeToBGR(lastNative_);
     if (shot.empty()) return;
+    shot = rotatedBGR(shot, cfg_.cameraRotate); // to display orientation first, so
+                                                // the upright-only cascade can find
+                                                // the face; matches the preview
     faceFilter_.apply(shot, filter_, filterPhase_);
     cam_->cropZoom(shot);
-    shot = rotatedBGR(shot, cfg_.cameraRotate); // match the rotated preview
     std::string path = timestampName("IMG", ".jpg");
     bool ok = false;
     try {
@@ -811,19 +813,32 @@ void App::renderCamera() {
     // face region is reshaped and re-encoded, the GPU converts and zooms the
     // rest (see renderFilteredNV12). A BGR webcam or a renderer without NV12
     // textures falls back to converting the full frame.
+    //
+    // The face cascade only finds upright faces, so filtering must run on the
+    // frame in *display* orientation. When --camera-rotate spins the image
+    // (e.g. an upside-down camera corrected with 180), the NV12 fast path -- which
+    // detects and reshapes on the un-rotated native buffer and rotates only at
+    // blit -- would look for an upright face in a rotated frame and find none, so
+    // the filter silently did nothing. Restrict the fast path to the unrotated
+    // case and route rotated filtering through the BGR path below, which rotates
+    // to display orientation *before* detecting and reshaping.
     const bool nv12FilterPath = filtering &&
                                 cam_->format() == PixelFormat::NV12 &&
-                                !nv12Unsupported_ && !lastNative_.empty();
+                                !nv12Unsupported_ && !lastNative_.empty() &&
+                                cfg_.cameraRotate == 0;
 
     beginFrame();
     if (filtering && !nv12FilterPath) {
-        // Full-resolution BGR: convert, reshape the face, then zoom. The filter
-        // runs before the zoom crop, matching the NV12 preview path so a photo
-        // carries exactly the expression shown on screen.
+        // Full-resolution BGR: convert, rotate to display orientation, reshape
+        // the face, then zoom. Reshaping after the rotation lets the upright-only
+        // cascade find the face; running it before the zoom crop (and at full
+        // resolution) matches the NV12 preview path so a photo carries exactly the
+        // expression shown on screen.
         cv::Mat bgr = cam_->nativeToBGR(lastNative_);
+        bgr = rotatedBGR(bgr, cfg_.cameraRotate);
         faceFilter_.apply(bgr, filter_, filterPhase_);
         cam_->cropZoom(bgr);
-        renderMat(bgr, cfg_.cameraRotate);
+        renderMat(bgr, 0); // already in display orientation
     } else if (nv12FilterPath) {
         renderFilteredNV12();
     } else if (!lastNative_.empty()) {
