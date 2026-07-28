@@ -21,6 +21,12 @@ float clampf(float v, float lo, float hi) {
     return v < lo ? lo : (v > hi ? hi : v);
 }
 
+// Smooth 0..1 ramp between edges e0 and e1 (Hermite), for the ear's fold.
+float smoothstep(float e0, float e1, float x) {
+    float t = clampf((x - e0) / (e1 - e0), 0.f, 1.f);
+    return t * t * (3.f - 2.f * t);
+}
+
 Vec3f norm(const Vec3f& v) {
     float n = std::sqrt(v.dot(v));
     return n > 1e-8f ? v * (1.f / n) : v;
@@ -174,55 +180,63 @@ Mesh buildNostrils() {
     return m;
 }
 
-// One ear: a broad, gently cupped triangular flap seated high on the top-side of
-// the head (clear of the eyes), rising up-and-out from a wide base and drooping
-// forward at the tip like a real pig's ear. Double-sided; the lower-inner part is
-// tinted a deeper pink so the ear reads as having an inner hollow.
+// One ear: a broad, folded "lop" ear like a domestic pig's. Its base sits high
+// on the top-side of the head (clear of the eyes); the flap rises only slightly,
+// then FOLDS forward and hangs down so the tip points down-and-forward toward the
+// temple, lateral to the eye. Built by sweeping a tapering width profile along a
+// curved centreline whose direction bends from up-out to down-forward at the
+// fold. Double-sided; the inner hollow shows a deeper pink near the base.
 Mesh buildEar(float side, float wiggle) {
     Mesh m;
     m.doubleSided = true;
     m.ambient = 0.36f;
-    m.spec = 0.16f;
+    m.spec = 0.13f;
     m.shin = 12.f;
     const Vec3f pink(170, 150, 238);
     const Vec3f inner(120, 95, 200);
 
-    // Seat the ear high on the top-side of the head, well above and outside the
-    // eyes (model eyes are at (+-0.5, -0.35)), so it never covers them.
-    const Vec3f baseC(side * 0.74f, -0.82f, 0.02f);
-    // The ear is a broad triangular flap. `length` runs up and outward from the
-    // base; `front` is roughly where its front face looks (forward, out, up).
-    Vec3f length = norm(Vec3f(side * 0.42f, -1.0f, -0.05f)); // up and out
-    Vec3f front = Vec3f(side * 0.45f, -0.20f, -0.86f);
-    Vec3f width = norm(front.cross(length)); // across the ear, in its plane
-    if (width[0] * side < 0.f) width = -width;
-    Vec3f N = norm(length.cross(width)); // true plane normal
-    if (N[2] > 0.f) N = -N;              // face the camera
-    // Floppy forward-and-down droop of the tip -> a real ear, not a stiff horn.
-    const Vec3f droopDir = norm(Vec3f(side * 0.05f, 0.42f, -1.0f));
-    const float earLen = 1.02f, curv = 0.12f, droop = 0.34f;
+    // Base high and outboard on the head (model eyes are at (+-0.5, -0.35)).
+    const Vec3f baseC(side * 0.72f, -0.80f, 0.03f);
+    // The centreline bends from "up and out" at the root to "down and forward"
+    // past the fold. Keeping a strong forward component (rather than folding
+    // straight down) gives a clean forward lop, not a crumpled crease.
+    const Vec3f rootDir = norm(Vec3f(side * 0.48f, -0.46f, -0.26f));
+    const Vec3f tipDir = norm(Vec3f(side * 0.14f, 0.60f, -0.64f));
+    const float earLen = 1.12f, curv = 0.12f;
 
-    const int nS = 13, nT = 9;
+    const int nS = 13, nT = 12;
+    // Sweep the folded centreline, carrying a local (width, normal) frame.
+    std::vector<Vec3f> cline(nT), Wd(nT), Nd(nT);
+    Vec3f c = baseC;
+    for (int ti = 0; ti < nT; ++ti) {
+        float t = (float)ti / (nT - 1);
+        float f = smoothstep(0.14f, 0.55f, t); // the fold
+        Vec3f dir = norm(rootDir * (1.f - f) + tipDir * f);
+        if (ti > 0) c += dir * (earLen / (nT - 1));
+        cline[ti] = c;
+        Vec3f W = norm(Vec3f(0.f, 0.f, -1.f).cross(dir)); // horizontal across ear
+        if (W[0] * side < 0.f) W = -W;                    // outward-positive
+        Vec3f N = norm(dir.cross(W));
+        if (N[2] > 0.f) N = -N; // front toward the camera
+        Wd[ti] = W;
+        Nd[ti] = N;
+    }
+
     std::vector<std::vector<int>> g(nT, std::vector<int>(nS));
     for (int ti = 0; ti < nT; ++ti) {
         float t = (float)ti / (nT - 1);
-        // Wide, rounded base tapering to a soft point: broad triangle, not a spike.
-        float halfW = 0.62f * std::pow(1.f - t, 0.85f);
-        // Round the very base corners in a touch.
-        if (t < 0.12f) halfW *= 0.75f + 0.25f * (t / 0.12f);
+        float halfW = 0.52f * (1.f - 0.42f * t); // broad base tapering to the tip
+        if (t < 0.1f) halfW *= 0.8f + 0.2f * (t / 0.1f); // round the base corners
         for (int si = 0; si < nS; ++si) {
             float s = 2.f * si / (nS - 1) - 1.f; // -1..1 across width
-            Vec3f p = baseC + length * (t * earLen) + width * (s * halfW);
-            // Gentle cup so the flap catches light without curling like a cone.
-            float cup = curv * (1.f - s * s) * (1.f - 0.5f * t);
-            p += N * cup;
-            // Progressive forward droop, strongest at the tip.
-            p += droopDir * (droop * t * t);
-            // Deeper pink toward the lower-central inner hollow.
-            float inF = clampf((1.f - std::fabs(s)) * 1.1f - 0.15f, 0.f, 1.f) *
-                        clampf(1.3f * (1.f - t), 0.f, 1.f);
-            Vec3f c = pink * (1.f - inF) + inner * inF;
-            g[ti][si] = m.add(p, c);
+            Vec3f p = cline[ti] + Wd[ti] * (s * halfW);
+            float cup = curv * (1.f - s * s);
+            p += Nd[ti] * cup;
+            // The inner hollow only peeks out near the base, where the fold opens.
+            float inF = clampf((1.f - std::fabs(s)) * 1.1f - 0.2f, 0.f, 1.f) *
+                        clampf(1.5f * (0.45f - t), 0.f, 1.f);
+            Vec3f col = pink * (1.f - inF) + inner * inF;
+            g[ti][si] = m.add(p, col);
         }
     }
     for (int ti = 0; ti + 1 < nT; ++ti)
