@@ -42,6 +42,7 @@ enum class Filter {
     None,
     BigSmile, // mouth stretched into a wide grin; teeth pop when it opens
     Crying,   // mouth/brows pulled into a frown, with falling tears
+    PigFace,  // smooth 3D pig ears/snout drawn over the face, tracking its angle
 };
 
 } // namespace olc

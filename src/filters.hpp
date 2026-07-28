@@ -12,14 +12,25 @@ namespace olc {
 
 // Real-time, WhatsApp-style facial-expression filters.
 //
-// The face itself is *reshaped* (its pixels are pushed around with cv::remap)
-// rather than having cartoon graphics pasted over it -- a "big smile" is your
-// own mouth stretched into a grin, a "crying" face is your own mouth and brows
-// pulled into a frown. The only thing actually drawn on top of the frame are
-// the falling tears of the crying filter.
+// The expression filters *reshape* the face itself (its pixels are pushed
+// around with cv::remap) rather than pasting cartoon graphics over it -- a "big
+// smile" is your own mouth stretched into a grin, a "crying" face is your own
+// mouth and brows pulled into a frown, the only thing drawn on top being the
+// crying tears.
 //
-// Faces are found with a stock OpenCV Haar cascade (objdetect); no landmark
-// model or contrib module is needed, which keeps it light enough for a Pi Zero.
+// The "pig face" filter instead draws smooth, 3D-shaded pig ears, snout and
+// cheeks over the frame. To keep those graphics glued to the face as the head
+// tilts and turns, it anchors them to a small set of landmarks derived from the
+// two eyes (a stock eye Haar cascade) plus the face box: the eye line gives the
+// in-plane roll and scale, and where the eyes sit inside the face box gives a
+// rough left/right turn (yaw). All the pig features are placed in one face-local
+// coordinate frame built from those landmarks, so the effect follows the head
+// rather than being pinned to an upright box.
+//
+// Faces (and eyes) are found with stock OpenCV Haar cascades (objdetect); no
+// landmark-regression model or contrib module is needed, which keeps it light
+// enough for a Pi Zero. When no eye cascade is available the pig features fall
+// back to the face box alone (upright, no roll/yaw tracking).
 class FaceFilter {
 public:
     // Loads the frontal-face cascade from the usual system locations.
@@ -55,10 +66,34 @@ public:
     // touched, so callers can convert and re-encode just the dirty region.
     void applyRegion(cv::Mat& roi, cv::Point origin, Filter filter, double phase);
 
+    // Draw the 3D pig-face graphics for an explicit face box and eye landmarks,
+    // bypassing detection. Pass eye centres (image coords) to orient it; pass
+    // (-1,-1) for either to fall back to the box (upright). Used by the mockup
+    // tools and tests to preview the effect deterministically.
+    void drawPigPreview(cv::Mat& frame, const cv::Rect& face, cv::Point2f leftEye,
+                        cv::Point2f rightEye, double phase) const;
+
 private:
+    // Landmarks for one face: the two eye centres (full-res frame coords). When
+    // `has` is false the eyes were not found this detection and pig-face falls
+    // back to the face box for orientation.
+    struct FaceEyes {
+        bool has = false;
+        cv::Point2f left, right; // image-left and image-right eye centres
+    };
+
     void detectLuma(const cv::Mat& luma);        // refresh faces_ (full-res coords)
+    // Fill `eyesPerFace_` from the eye cascade, run on the shared downscaled
+    // detection image `small` (invScale maps its coords back to full-res).
+    void detectEyes(const cv::Mat& small, double invScale,
+                    const std::vector<cv::Rect>& facesSmall);
     void applySmile(cv::Mat& frame, const cv::Rect& face);
     void applyCry(cv::Mat& frame, const cv::Rect& face, double phase);
+    // Draw the smooth 3D pig ears/snout/cheeks over one face, oriented by its
+    // landmarks (or the face box when eyes are unavailable). `phase` drives a
+    // gentle ear wiggle. Coords are roi-local (see applyRegion).
+    void applyPig(cv::Mat& frame, const cv::Rect& face, const FaceEyes& eyes,
+                  double phase) const;
 
     // Rough 0..1 estimate of how open the mouth is, from the contrast of the
     // central mouth patch (an open mouth = dark cavity next to bright teeth).
@@ -69,11 +104,24 @@ private:
     void drawTears(cv::Mat& frame, const cv::Rect& face, double phase) const;
 
     cv::CascadeClassifier face_;
+    cv::CascadeClassifier eyes_;         // for pig-face landmark orientation
     bool loaded_ = false;
+    bool eyesLoaded_ = false;            // eye cascade available?
     bool warned_ = false;                // "no cascade" logged only once
     int frameCount_ = 0;                 // detection runs every few frames
     std::vector<cv::Rect> faces_;        // last detection result, full-res
+    std::vector<FaceEyes> eyesPerFace_;  // eye landmarks, aligned with faces_
+    // Previous detection's smoothed eyes + face centres, used to low-pass the
+    // jittery eye boxes across detections (matched to new faces by proximity).
+    std::vector<cv::Point2f> prevCentres_;
+    std::vector<FaceEyes> prevEyes_;
 };
+
+// Try to load the eye Haar cascade that sits next to a given face-cascade path
+// (same directory, "haarcascade_eye.xml"). Exposed for reuse/testing; returns
+// true and fills `out` on success.
+bool loadSiblingEyeCascade(const std::string& faceCascadePath,
+                           cv::CascadeClassifier& out);
 
 // Cycle order for the on-screen filter button: None -> BigSmile -> Crying ->.
 Filter nextFilter(Filter f);
