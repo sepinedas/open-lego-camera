@@ -95,8 +95,24 @@ if(WITH_MEDIAPIPE)
   # symbols aren't in libmediapipe_tasks.so.
   target_compile_definitions(open-lego-camera PRIVATE
     OLC_WITH_MEDIAPIPE=1 MEDIAPIPE_DISABLE_GPU=1)
-  target_include_directories(open-lego-camera PRIVATE "${_mp_root}/include")
+  # SYSTEM so the compiler treats MediaPipe's (and its bundled deps') headers as
+  # third-party: it silences the -Wall/-Wextra warning flood from those headers.
+  target_include_directories(open-lego-camera SYSTEM PRIVATE "${_mp_root}/include")
   target_link_libraries(open-lego-camera PRIVATE "${MEDIAPIPE_TASKS_LIB}")
+
+  # mp_landmarker.cpp is the one translation unit that pulls in MediaPipe's heavy
+  # C++20 headers (protobuf, Abseil, the Tasks API). On a 512 MB Pi Zero 2 W that
+  # single compile can exhaust RAM and get the compiler OOM-killed
+  # ("cc1plus: Killed"). Compile just this file at -O1 and, on GCC, tell the
+  # garbage collector to reclaim memory aggressively, which markedly lowers peak
+  # memory at a small speed cost. (Still build with `-j1` on the Zero -- see the
+  # README -- since parallel heavy compiles multiply the memory pressure.)
+  set(_mp_tu_opts -O1)
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    list(APPEND _mp_tu_opts --param ggc-min-expand=20 --param ggc-min-heapsize=32768)
+  endif()
+  set_source_files_properties(src/mp_landmarker.cpp PROPERTIES
+    COMPILE_OPTIONS "${_mp_tu_opts}")
 endif()
 
 install(TARGETS open-lego-camera RUNTIME DESTINATION bin)

@@ -117,9 +117,26 @@ newest `/opt/mediapipe/<ver>`; override with `-DMEDIAPIPE_ROOT=…`), and run wi
 
 ```sh
 cmake -B build -DWITH_MEDIAPIPE=ON
-cmake --build build -j
+cmake --build build -j1        # -j1 on the Pi Zero 2 W -- see the note below
 build/open-lego-camera --face-landmarker /opt/mediapipe/models/face_landmarker.task
 ```
+
+> **Building on a 512 MB Pi Zero 2 W.** The one file that includes MediaPipe's
+> headers (`mp_landmarker.cpp`) is a heavy C++20 compile (protobuf + Abseil +
+> the Tasks API). On the Zero's 512 MB of RAM it can be **OOM‑killed**
+> (`c++: fatal error: Killed signal terminated program cc1plus`). To get it to
+> build on the device:
+> - compile **single‑threaded** (`cmake --build build -j1`) so only one heavy
+>   compile runs at a time — the CMake already compiles that file at `-O1` with
+>   aggressive GCC garbage collection to keep peak memory down;
+> - add **swap** if it still gets killed, e.g. a 2 GB swapfile:
+>   ```sh
+>   sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+>   sudo mkswap /swapfile && sudo swapon /swapfile
+>   ```
+> - or simply **build on a Pi 4 / Pi 5** running the same 64‑bit Raspberry Pi OS
+>   (Bookworm) and copy the binary over — the `arm64` executable is portable
+>   across Pi boards, just like the MediaPipe `.deb`.
 
 Everything degrades gracefully: build without `-DWITH_MEDIAPIPE=ON` (the
 default) and the app is exactly as before; build with it but launch without a
