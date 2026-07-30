@@ -1,0 +1,4 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "open-lego-camera")(type "KiCad")(uri "${KIPRJMOD}/open-lego-camera.pretty")(options "")(descr "Local placeholder footprints for the CM4 carrier"))
+)

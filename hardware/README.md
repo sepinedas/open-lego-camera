@@ -11,6 +11,8 @@ and a handful of user buttons/LEDs on a Dupont header.
 | `open-lego-camera-cm4.kicad_pro` | KiCad 7/8 project file |
 | `open-lego-camera-cm4.kicad_pcb` | PCB: layer stack, all nets, board outline, top + bottom GND ground planes |
 | `build_pcb.py` | KiCad 10 `pcbnew` script: places parts, draws outline, pours GND planes, exports DSN + imports routed SES |
+| `fp-lib-table` | Registers the local footprint library (needed for the CM4 placeholder) |
+| `open-lego-camera.pretty/CM4_Functional.kicad_mod` | Placeholder CM4 land pattern; pads match the symbol pins so every CM4 net maps |
 
 Open it with **KiCad 7 or 8**: `File ▸ Open Project…` → `open-lego-camera-cm4.kicad_pro`,
 or open the `.kicad_sch` directly in the schematic editor.
@@ -117,7 +119,10 @@ libraries. Finish the board in KiCad 10:
 
 1. Open the project and the schematic; run **Tools ▸ Update PCB from Schematic**
    (`F8`). KiCad pulls in all footprints with correct pads and the ratsnest,
-   matching the nets already in the board (including GND).
+   matching the nets already in the board (including GND). The bundled
+   `fp-lib-table` registers the local `open-lego-camera.pretty` library so the
+   CM4 placeholder footprint resolves — if KiCad prompts about the project
+   library table, accept it (or restart KiCad after pulling these files).
 2. Run **`build_pcb.py`** to place the parts by subsystem, (re)draw the outline,
    pour both GND planes, and export the router job. In the PCB editor's
    **Tools ▸ Scripting Console**:
@@ -140,9 +145,15 @@ libraries. Finish the board in KiCad 10:
 > shared calls are used and version-sensitive ones are guarded). It must run
 > inside KiCad; `pcbnew` is not a standalone package.
 
-> Reminder: `U5` (CM4) is a single functional symbol/footprint placeholder.
-> Replace it with the two physical 100-pin Hirose DF40 connectors and verify
-> every pin against the CM4 datasheet before routing a real board.
+> Reminder: `U5` (CM4) uses `open-lego-camera:CM4_Functional`, a **placeholder**
+> land pattern whose 54 pads are named to match the functional symbol pins so
+> every CM4 net maps and routes. It is **not** the real CM4 mechanical
+> footprint — before fabricating, replace it with the two physical 100-pin
+> Hirose DF40 connectors and verify every pin against the CM4 datasheet.
+
+All other footprints reference stock KiCad 10 libraries and were validated
+against the official KiCad footprint repository (the connectors, the ICS-43434
+mic, the DFN/QFN ICs, the Bourns inductor, and the 15-pin 1 mm FFC connectors).
 
 ## Bill of materials (key parts)
 
