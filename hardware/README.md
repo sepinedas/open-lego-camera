@@ -9,6 +9,8 @@ and a handful of user buttons/LEDs on a Dupont header.
 | --- | --- |
 | `open-lego-camera-cm4.kicad_sch` | The schematic (all symbols embedded — no external libraries required) |
 | `open-lego-camera-cm4.kicad_pro` | KiCad 7/8 project file |
+| `open-lego-camera-cm4.kicad_pcb` | PCB: layer stack, all nets, board outline, top + bottom GND ground planes |
+| `fill_ground_and_place.py` | Optional KiCad-Python helper to auto-place parts and pour the ground planes |
 
 Open it with **KiCad 7 or 8**: `File ▸ Open Project…` → `open-lego-camera-cm4.kicad_pro`,
 or open the `.kicad_sch` directly in the schematic editor.
@@ -96,6 +98,47 @@ completed wiring:
   KiCad 7/8 libraries; confirm each against your chosen manufacturer part, and
   double-check the `ICS-43434` (mapped to a Knowles LGA-6 land pattern) and the
   `MAX17048` package before ordering.
+
+## PCB
+
+`open-lego-camera-cm4.kicad_pcb` is a 2-layer board that already contains:
+
+- the full copper/silk/mask/paste **layer stack**;
+- **every net** from the schematic (matched by name, GND = net 1);
+- a **100 × 80 mm board outline** on `Edge.Cuts`;
+- **GND ground-plane zones on both copper layers** (`F.Cu` and `B.Cu`).
+
+### Completing footprints + routing (done in KiCad)
+
+Copper **routes** and the **footprint pad geometry** are not written into the
+file here — routing traces connect real pad coordinates, and both the pads and
+the copper pour are produced by KiCad's engine from your installed footprint
+libraries (not available in the generation environment). Finish the board in
+KiCad with these steps:
+
+1. Open the project and the schematic; run **Tools ▸ Update PCB from Schematic**
+   (`F8`). KiCad pulls in all footprints with correct pads and the ratsnest,
+   matching the nets already in the board (including GND).
+2. Arrange the footprints by subsystem (or run the helper below for a coarse
+   auto-spread).
+3. **Route** the board: manually, or export **File ▸ Export ▸ Specctra DSN**,
+   autoroute with [Freerouting](https://github.com/freerouting/freerouting),
+   then **File ▸ Import ▸ Specctra Session** to bring the routes back.
+4. **Edit ▸ Fill All Zones** (`B`) to pour the GND planes onto the pads.
+5. Run **DRC** and fix any violations before fabrication.
+
+Optional helper (run inside KiCad's Python, board open):
+
+```
+exec(open('hardware/fill_ground_and_place.py').read())
+```
+
+It spreads the footprints on a grid, ensures the two GND zones exist, and fills
+them. It does not route — pcbnew has no autorouter; use Freerouting (step 3).
+
+> Reminder: `U5` (CM4) is a single functional symbol/footprint placeholder.
+> Replace it with the two physical 100-pin Hirose DF40 connectors and verify
+> every pin against the CM4 datasheet before routing a real board.
 
 ## Bill of materials (key parts)
 
