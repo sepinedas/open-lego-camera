@@ -56,25 +56,46 @@ net anywhere on the sheet. Key nets:
 - **DSI0:** `DSI0_*` differential pairs
 - **User IO:** `BTN1..3` / `BTN*_GPIO` (GPIO5/6/13), `LED1..2` / `LED*_GPIO` (GPIO16/26)
 
+## Connections & footprints
+
+Every component pin is wired to a net (no floating functional pins), and
+**every component is assigned a standard KiCad footprint**. Highlights of the
+completed wiring:
+
+- **USB-C data** (`USB_DP`/`USB_DN`) is routed to the CM4 USB pins, and the CC
+  lines have 5.1 kΩ sink pulldowns.
+- **Charger straps:** `CE` tied high (charging enabled), `TE` low (safety timer
+  off), `PROG1`/`PROG2` resistors set the fast-charge and USB input-current
+  limits. `STAT1`, `STAT2` and `PG` drive **status LEDs** `D1`/`D2`/`D3`.
+- **Fuel gauge** `QSTRT` tied low; `FUEL_ALRT` routed to CM4 `GPIO24`.
+- **Camera control** — each camera's enable/LED lines go to CM4 GPIOs
+  (`GPIO4/27` enable, `GPIO22/23` LED); camera/display I²C shares `CAM_SDA/SCL`
+  with 1.8 kΩ pull-ups.
+- **Amp** `GAIN` set with a 100 kΩ-to-GND resistor (12 dB); `SD_MODE` pulled to
+  +5 V (enabled, left/right averaged).
+- **Boot control** — `GLOBAL_EN` and `nRPIBOOT` pulled up; `J9` is a jumper that
+  grounds `nRPIBOOT` to force USB (rpiboot) flashing mode.
+- **Test points** `TP1`–`TP3` expose the CM4 `+3V3` output, `RUN_PG`, and
+  `SD_VDD_EN`.
+
 ## Notes & assumptions
 
 - The CM4 is drawn as a **functional symbol** (`U5`) exposing the power rails
-  and the specific GPIO / SDIO / CSI / DSI / I²S pins used here, rather than the
-  two full 100-pin Hirose DF40 board connectors. This keeps the schematic
-  readable; **before fabricating a PCB, expand it to the two physical 100-pin
-  connectors and verify every pin against the official CM4 datasheet.**
+  and the specific GPIO / SDIO / CSI / DSI / I²S / USB pins used here, rather
+  than the two full 100-pin Hirose DF40 board connectors. This keeps the
+  schematic readable; the assigned footprint is a single DF40 100-pin connector
+  as a placeholder. **Before fabricating a PCB, expand `U5` to the two physical
+  100-pin connectors and verify every pin against the official CM4 datasheet.**
 - "LCD **SDI**" in the brief is interpreted as the CM4 **DSI** (Display Serial
   Interface) — the standard way to attach a Raspberry Pi LCD panel.
 - Camera/display connectors are the common **15-pin 1 mm FFC** Pi camera/display
   pinout. If you use the 22-pin 0.5 mm flat-flex found on CM4 IO boards / Pi Zero,
   swap the connectors and re-check the pinout.
 - Symbols are simplified rectangular representations with the correct pin
-  **names/functions** for schematic capture; **footprints are intentionally left
-  unassigned** and must be added before layout.
-- ERC will flag the intentionally-optional signals left available as test points
-  (charger `STAT`/`PG`, `FUEL_ALRT`, camera `GPIO`/`LED`, CM4 `RUN_PG`, the CM4
-  `+3V3` output, etc.). Assign footprints and complete these connections for a
-  production board.
+  **names/functions** for schematic capture. Footprints reference the standard
+  KiCad 7/8 libraries; confirm each against your chosen manufacturer part, and
+  double-check the `ICS-43434` (mapped to a Knowles LGA-6 land pattern) and the
+  `MAX17048` package before ordering.
 
 ## Bill of materials (key parts)
 
@@ -94,3 +115,6 @@ net anywhere on the sheet. Key nets:
 | J6 | 15-pin DSI FFC | LCD |
 | J7 | 2-pin socket | Speaker |
 | J8 | 2.54 mm header | Buttons + LEDs (Dupont) |
+| J9 | 2-pin jumper | rpiboot / USB-flash mode select |
+| D1–D3 | LED | Charge / standby / power-good status |
+| TP1–TP3 | Test point | CM4 +3V3 out, RUN_PG, SD_VDD_EN |
