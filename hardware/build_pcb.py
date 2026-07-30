@@ -142,36 +142,75 @@ def fill_zones(board):
     print("Filled all zones (ground planes poured).")
 
 
+def find_freerouting():
+    """Locate freerouting.jar: env var, common paths, or download it."""
+    import glob
+    cand = [os.environ.get("FREEROUTING_JAR", "")]
+    for d in (os.getcwd(), os.path.dirname(os.path.abspath(__file__)),
+              os.path.expanduser("~"), os.path.expanduser("~/Downloads")):
+        cand += glob.glob(os.path.join(d, "freerouting*.jar"))
+    for j in cand:
+        if j and os.path.exists(j):
+            return j
+    # not found -> try to download the latest release .jar from GitHub
+    try:
+        import json, urllib.request
+        print("Freerouting not found; fetching the latest release ...")
+        api = "https://api.github.com/repos/freerouting/freerouting/releases/latest"
+        rel = json.load(urllib.request.urlopen(api, timeout=30))
+        url = next(a["browser_download_url"] for a in rel["assets"]
+                   if a["name"].endswith(".jar"))
+        dst = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           os.path.basename(url))
+        urllib.request.urlretrieve(url, dst)
+        print("Downloaded", dst)
+        return dst
+    except Exception as e:
+        print("Could not obtain Freerouting automatically (%s)." % e)
+        return None
+
+
+def run_freerouting(jar, dsn, ses):
+    """Try the CLI conventions across Freerouting 1.x and 2.x."""
+    attempts = [
+        ["java", "-jar", jar, "-de", dsn, "-do", ses, "-mp", "100"],
+        ["java", "-jar", jar, "--input", dsn, "--output", ses],
+        ["java", "-jar", jar, "-de", dsn, "-do", ses],
+    ]
+    for cmd in attempts:
+        try:
+            print("Running:", " ".join(cmd))
+            subprocess.run(cmd, check=True)
+            if os.path.exists(ses) and os.path.getsize(ses) > 0:
+                return True
+        except Exception as e:
+            print("  attempt failed (%s)" % e)
+    return False
+
+
 def route(board, board_path):
-    """Export DSN, autoroute with Freerouting if available, import SES."""
+    """Export DSN, autoroute with Freerouting, import the routed SES."""
     dsn = os.path.splitext(board_path)[0] + ".dsn"
     ses = os.path.splitext(board_path)[0] + ".ses"
     try:
-        ok = pcbnew.ExportSpecctraDSN(dsn)  # GUI/global helper
+        pcbnew.ExportSpecctraDSN(dsn)
         print("Exported Specctra DSN ->", dsn)
     except Exception as e:
         print("Could not auto-export DSN (%s)." % e)
-        print("   Do it in the GUI: File > Export > Specctra DSN, then autoroute.")
+        print("   Export it via File > Export > Specctra DSN, then autoroute.")
         return
-    jar = os.environ.get("FREEROUTING_JAR")
-    if not jar or not os.path.exists(jar):
-        print("Set FREEROUTING_JAR to freerouting.jar to autoroute automatically.")
-        print("   Meanwhile: route %s in Freerouting, then File > Import > Specctra Session." % dsn)
+    jar = find_freerouting()
+    if not jar:
+        print("Route %s in Freerouting, then File > Import > Specctra Session." % dsn)
+        return
+    if not run_freerouting(jar, dsn, ses):
+        print("Autorouting did not complete; open %s in Freerouting manually." % dsn)
         return
     try:
-        # Freerouting CLI (v1.x): -de input.dsn -do output.ses ; newer builds
-        # accept --input/--output. Try the classic flags first.
-        subprocess.run(["java", "-jar", jar, "-de", dsn, "-do", ses],
-                       check=True)
+        pcbnew.ImportSpecctraSES(ses)
+        print("Imported routed session ->", ses)
     except Exception as e:
-        print("Freerouting run failed (%s); route the DSN manually." % e)
-        return
-    if os.path.exists(ses):
-        try:
-            pcbnew.ImportSpecctraSES(ses)
-            print("Imported routed session ->", ses)
-        except Exception as e:
-            print("Import the .ses via File > Import > Specctra Session (%s)." % e)
+        print("Import the .ses via File > Import > Specctra Session (%s)." % e)
 
 
 def get_board():

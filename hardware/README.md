@@ -131,12 +131,15 @@ libraries. Finish the board in KiCad 10:
    exec(open('hardware/build_pcb.py').read())
    ```
 
-3. **Route** the board. `pcbnew` has no built-in autorouter, so the script uses
-   [Freerouting](https://github.com/freerouting/freerouting) (needs Java):
-   set `FREEROUTING_JAR=/path/to/freerouting.jar` before step 2 and it will
-   autoroute and import the result automatically. Otherwise the script exports
-   `open-lego-camera-cm4.dsn`; route it in Freerouting and bring it back with
-   **File ▸ Import ▸ Specctra Session** (`.ses`). You can also route by hand.
+3. **Route** the board. `pcbnew` has no built-in autorouter, so the script
+   drives [Freerouting](https://github.com/freerouting/freerouting) (needs
+   **Java**). In step 2 it automatically: exports `open-lego-camera-cm4.dsn`,
+   locates `freerouting*.jar` (env var `FREEROUTING_JAR`, the current/`hardware`
+   folder, `~`, or `~/Downloads`) — **downloading the latest release if none is
+   found** — autoroutes, and imports the `.ses` back. If Java or the network is
+   unavailable, route the exported `.dsn` in the Freerouting GUI yourself and
+   bring it back with **File ▸ Import ▸ Specctra Session**. Hand-routing works
+   too.
 4. The script re-runs **Fill All Zones** after routing; press `B` any time to
    re-pour. Then run **DRC** (Inspect ▸ Design Rules Checker) and fix issues
    before fabrication.
