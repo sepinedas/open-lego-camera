@@ -31,9 +31,20 @@ A touch-friendly, **icon-only** camera app for the **Raspberry Pi Zero 2 W**
 - **WhatsApp-style facial filters** (smiley button): a **Big Smile** that
   stretches your mouth into a wide grin — with your teeth brightening as you
   open it — and a **Crying** face that pulls your mouth and brows into a frown
-  and adds animated falling **tears**. The face is *reshaped in place* (its own
-  pixels warped), not covered with cartoon graphics — only the tears are drawn
-  on top. Applies live to the preview and to captured photos.
+  and adds animated falling **tears**. These two *reshape the face in place* (its
+  own pixels warped), not covered with cartoon graphics — only the tears are
+  drawn on top.
+- A **Pig Face** filter built from actual **3D models** — mesh ears and a
+  protruding snout with two nostrils — rendered through a **perspective camera**
+  by a tiny built-in software renderer (z-buffer + shading + anti-aliasing). The
+  head's **pose** (roll / yaw / pitch) is estimated from a small set of
+  **landmarks** — the two eyes plus the face box — so the models **share the
+  face's orientation and perspective**: the snout foreshortens as it turns toward
+  you and the ears swing around and occlude behind the head, rather than sitting
+  on top like flat stickers. All filters apply live to the preview and to
+  captured photos.
+
+  ![Pig-face filter at several head angles](docs/pig-filter.png)
 
 ![Welcome screen](docs/welcome-screen.png)
 
@@ -55,6 +66,7 @@ A touch-friendly, **icon-only** camera app for the **Raspberry Pi Zero 2 W**
 | Icon-only buttons, no text | all icons are drawn as vector shapes (`icons.cpp`, SDL2_gfx) |
 | Headless — no X11 / window manager | SDL2 `kmsdrm`/`fbcon` renders directly to HDMI |
 | WhatsApp-style facial filters | `FaceFilter` finds the face (Haar cascade) and warps the mouth/brows with `cv::remap`; the crying filter also draws tears (`filters.cpp`) |
+| Pig-face filter (real 3D models) | `FaceFilter` also finds the eyes (eye Haar cascade); `pig3d` estimates the head pose from those landmarks and rasterises 3D ear/snout meshes through a perspective camera (z-buffer, Gouraud shading, supersampled AA) so they follow the face's orientation and perspective (`pig3d.cpp`) |
 
 ## Dependencies
 
@@ -73,6 +85,11 @@ above) and its bundled Haar cascades, which Debian/Raspberry Pi OS ship in the
 ```sh
 sudo apt install opencv-data
 ```
+
+This package provides both the frontal-face cascade and the **eye** cascade
+(`haarcascade_eye.xml`). The pig-face filter uses the eye cascade to track head
+angle; without it the pig still appears but stays upright (no roll/turn
+tracking).
 
 If the cascade lives somewhere non-standard, point the app at it with
 `--face-cascade /path/to/haarcascade_frontalface_default.xml`. Without a
@@ -178,20 +195,44 @@ build/open-lego-camera [options]
 ### Facial filters
 
 Tap the **smiley** button in the camera menu to cycle the live
-facial filter: **Big Smile** → **Crying** → off. The active filter's name
-appears briefly on screen, and the effect is baked into any photo you
-then capture.
+facial filter: **Big Smile** → **Crying** → **Pig Face** → off. The active
+filter's name appears briefly on screen, and the effect is baked into any photo
+you then capture.
 
 - **Big Smile** stretches your mouth's corners up and out into a wide grin and
   opens it vertically; the more you open your mouth, the more your teeth are
   brightened, so they "pop".
 - **Crying** curls your mouth down into a frown, pinches your inner brows down,
   and streams animated tears down your cheeks.
+- **Pig Face** overlays real **3D models** — mesh ears and a protruding snout
+  with two nostrils. They are shaded by a directional light and composited with
+  a z-buffer, so the snout genuinely bulges toward you and the far ear can pass
+  behind the head. The ears give a gentle idle wiggle.
 
-Both filters *warp your actual face* — no cartoon mouth or eyes are pasted on
-top; only the crying tears are drawn over the image. Faces are found with a
-stock OpenCV Haar cascade, so no landmark model or `opencv_contrib` build is
-required — keeping it light enough for the Pi Zero 2 W.
+The first two filters *warp your actual face* — no cartoon mouth or eyes are
+pasted on top; only the crying tears are drawn over the image.
+
+**Following the head's orientation and perspective.** The pig is not a flat
+overlay: `pig3d` estimates the head's 3D pose and renders the meshes through a
+perspective camera, so they turn and foreshorten with the head. The pose comes
+from a handful of landmarks rather than the upright detection box:
+
+- the **two eyes** (found with the stock eye Haar cascade) give the eye line,
+  which fixes the in-plane **roll** and the **scale** (inter-ocular distance);
+- where the eyes sit inside the **face box** gives a rough left/right **turn**
+  (yaw) and up/down nod (**pitch**).
+
+From those, a rotation matrix orients every mesh and a perspective projection
+(with a z-buffer for occlusion and supersampling for smooth edges) draws them, so
+the whole rig **rolls, turns, foreshortens and occludes with your head** and does
+not read as a sticker. If the eye cascade is unavailable the pig still draws,
+front-facing, from the face box alone.
+
+Faces and eyes are found with stock OpenCV Haar cascades and the 3D rendering is
+a small self-contained software rasteriser, so no landmark-regression model,
+`opencv_contrib` build, or GPU is required — keeping it light enough for the Pi
+Zero 2 W. The `tools/pig_preview.cpp` helper renders the pig at several angles
+(the image above) without a camera, for a quick look.
 
 ### Rotating the display
 

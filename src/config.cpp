@@ -65,7 +65,9 @@ static void printUsage(const char* prog) {
         "  --driver NAME                force SDL video driver (kmsdrm, fbcon, x11)\n"
         "  --windowed                   run in a window instead of fullscreen\n"
         "  --face-cascade PATH          Haar face-cascade XML for the facial\n"
-        "                               filters (default: system opencv-data)\n"
+        "                               filters (default: system opencv-data;\n"
+        "                               haarcascade_eye.xml beside it is used for\n"
+        "                               the pig-face filter's angle tracking)\n"
         "  --help                       show this help\n";
 }
 
