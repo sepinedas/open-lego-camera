@@ -15,7 +15,7 @@ cm4-carrier.kicad_sch                        (root / top level)
 ├── power_input.kicad_sch         USB-C in → BQ24075 DPPM charger → SYS
 ├── regulator.kicad_sch           TPS61088 boost converter → 5 V rail
 ├── battery_monitor.kicad_sch     MAX17048 I²C fuel gauge
-└── cm4.kicad_sch                 Raspberry Pi Compute Module 4
+└── cm4.kicad_sch                 Raspberry Pi CM4 (2× DF40C-100DP connectors)
 ```
 
 Open `cm4-carrier/cm4-carrier.kicad_pro` in **KiCad 10** (or newer) and start
@@ -68,7 +68,14 @@ from the root schematic; double-click any sheet box to descend into it.
   CM4. `R5`/`R6` set the output via the feedback divider.
 - **MAX17048 (U3)** is an I²C ModelGauge fuel gauge sensing the protected cell
   voltage on `VBAT`; it reports state-of-charge to the CM4 over **I²C1**
-  (`GPIO2`/`SDA`, `GPIO3`/`SCL`), pulled up to the CM4's 3.3 V rail.
+  (`GPIO2`/`SDA`, `GPIO3`/`SCL`), pulled up to the CM4's `CM4_3.3V_Out` rail.
+- **Compute Module 4 (J3, J4)** — the module is modeled as its two real 100-pin
+  **Hirose DF40C-100DP-0.4V** mating connectors (J3 = connector 1, J4 =
+  connector 2) with the full, correctly-numbered CM4 pinout. This board wires
+  what it needs: all six **+5V** input pins, every **GND**, **GPIO2/GPIO3**
+  (I²C1) to the fuel gauge, and **`GPIO_VREF` + `CM4_3.3V_Out`** for the 3.3 V
+  I/O rail. The high-speed interfaces (PCIe, USB, Ethernet, HDMI, CSI/DSI camera
+  & display) are left available on the connectors for future expansion.
 
 ## Bill of materials
 
@@ -76,7 +83,7 @@ from the root schematic; double-click any sheet box to descend into it.
 |-----|-------|------|-----------|
 | J1 | USB-C receptacle | GCT USB4110-GF-A | `Connector_USB:USB_C_Receptacle_GCT_USB4110-GF-A_16P_TopMnt_Horizontal` |
 | J2 | LiPo 3.7 V 3000 mAh | JST-GH 2-pin | `Connector_JST:JST_GH_SM02B-GHS-TB_1x02-1MP_P1.25mm_Horizontal` |
-| J3 | Raspberry Pi CM4 | 2× Hirose DF40C-100DS | `Connector_Hirose:Raspberry_Pi_CM4_DF40C-100DS` |
+| J3, J4 | Raspberry Pi CM4 (mating) | 2× Hirose DF40C-100DP-0.4V | `Connector_Hirose_DF40:Hirose_DF40C-100DP-0.4V_2x50-1MP_P0.4mm` |
 | U1 | BQ24075RGT | DPPM Li-ion charger | `Package_DFN_QFN:VQFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm` |
 | U2 | TPS61088 | 5 V boost converter | `Package_DFN_QFN:QFN-20-1EP_3x3mm_P0.4mm_EP1.65x1.65mm` |
 | U3 | MAX17048G+T | I²C fuel gauge | `Package_DFN_QFN:DFN-8-1EP_2x2mm_P0.5mm_EP0.61x1.42mm` |
@@ -107,6 +114,7 @@ from the root schematic; double-click any sheet box to descend into it.
 | C8 | 1 µF | fuel-gauge decoupling | `Capacitor_SMD:C_0603_1608Metric` |
 | C9 | 100 µF | 5 V bulk | `Capacitor_SMD:C_1206_3216Metric` |
 | C11 | 0.1 µF | protection VDD decoupling | `Capacitor_SMD:C_0603_1608Metric` |
+| C12 | 10 µF | CM4 5 V decoupling | `Capacitor_SMD:C_0805_2012Metric` |
 
 ## Notes and caveats
 
@@ -116,13 +124,16 @@ from the root schematic; double-click any sheet box to descend into it.
   this stage is redundant (harmless, but you can depopulate `U4`/`Q1` and link
   `B-`→`GND`). The BQ24075's `TS` thermistor and the fuel gauge's over/under
   voltage alerts add further layers.
-- **Footprints** point at KiCad's standard libraries where a standard part
-  exists. Worth double-checking against your installed libraries and adjusting
-  in *Assign Footprints* if a name differs:
-  - The **CM4** module (`J3`) uses two Hirose `DF40C-100DS-0.4V` board-to-board
-    connectors. Use the Raspberry Pi CM4 footprint from your library — the symbol
-    here is a simplified representation exposing only the pins this design uses
-    (5 V, GND, `GPIO2/SDA1`, `GPIO3/SCL1`, 3.3 V out).
+- **CM4 connectors & bring-up.** `J3`/`J4` are the **DF40C-100DP-0.4V** parts on
+  the *carrier* that mate with the CM4's DF40C-100DS sockets; pick the stacking
+  height (DF40C = 1.5 mm, DF40HC = 3.0 mm) to suit your mechanical stack. Because
+  this is a power/monitor carrier, most CM4 pins are intentionally left
+  unconnected and **will show as unconnected in ERC** — that is expected. For a
+  fully bootable design you will also want to handle the CM4 control pins per the
+  datasheet (`GLOBAL_EN`, `RUN_PG`, `nRPIBOOT`, `SD_*` / eMMC boot, etc.) and
+  break out whichever high-speed interfaces you use (e.g. a CSI camera).
+- **Footprints** otherwise point at KiCad's standard libraries. Worth
+  double-checking in *Assign Footprints* if a name differs:
   - The **inductor** (`L1`) footprint should match the specific high-current
     part you select for the boost converter.
 - **Current budget:** boosting a 1S LiPo to 5 V at the CM4's peak draw pulls a
