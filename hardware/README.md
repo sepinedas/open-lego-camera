@@ -2,11 +2,11 @@
 
 A KiCad schematic for a **Raspberry Pi Compute Module 4** carrier board that
 powers the [open-lego-camera](../README.md) from a single-cell LiPo battery,
-with **USB-C charging + Dynamic Power Path Management** and a dedicated
-**battery-protection** stage.
+with **USB-C charging + Dynamic Power Path Management**, a dedicated
+**battery-protection** stage, and **two CSI-2 cameras**.
 
 The design is drawn as a **hierarchical schematic**: a top-level sheet
-(`cm4-carrier.kicad_sch`) instantiates five sub-sheets, one per functional
+(`cm4-carrier.kicad_sch`) instantiates six sub-sheets, one per functional
 block.
 
 ```
@@ -15,7 +15,8 @@ cm4-carrier.kicad_sch                        (root / top level)
 ├── power_input.kicad_sch         USB-C in → BQ24075 DPPM charger → SYS
 ├── regulator.kicad_sch           TPS61088 boost converter → 5 V rail
 ├── battery_monitor.kicad_sch     MAX17048 I²C fuel gauge
-└── cm4.kicad_sch                 Raspberry Pi CM4 (2× DF40C-100DP connectors)
+├── cm4.kicad_sch                 Raspberry Pi CM4 (2× DF40C-100DP connectors)
+└── cameras.kicad_sch             2× CSI-2 camera FFC + PCA9544A I²C mux
 ```
 
 Open `cm4-carrier/cm4-carrier.kicad_pro` in **KiCad 10** (or newer) and start
@@ -76,6 +77,15 @@ from the root schematic; double-click any sheet box to descend into it.
   (I²C1) to the fuel gauge, and **`GPIO_VREF` + `CM4_3.3V_Out`** for the 3.3 V
   I/O rail. The high-speed interfaces (PCIe, USB, Ethernet, HDMI, CSI/DSI camera
   & display) are left available on the connectors for future expansion.
+- **Two CSI-2 cameras (J5, J6)** on standard 15-pin **1.0 mm Raspberry Pi camera
+  FFC** connectors. `J5` uses the CM4's **CAM0** (2-lane) interface and `J6` uses
+  **CAM1** (4-lane; two lanes wired, enough for standard Pi cameras). Because
+  both cameras answer at the same I²C address, a **PCA9544A I²C mux (U5)** sits on
+  the camera control bus (**I²C0**, from `I2C_SCL0`/`I2C_SDA0`) so each camera is
+  on its own mux channel. A local **AP2112K-3.3 LDO (U7)** supplies the camera
+  3.3 V rail from `+5V` (keeping the load off the CM4's limited `CM4_3.3V_Out`),
+  and each camera's `IO0`/`IO1` (LED / power-enable) route to spare CM4 GPIOs
+  (GPIO4–7). The CM4↔camera CSI/I²C0 nets use **global labels**.
 
 ## Bill of materials
 
@@ -84,6 +94,9 @@ from the root schematic; double-click any sheet box to descend into it.
 | J1 | USB-C receptacle | GCT USB4110-GF-A | `Connector_USB:USB_C_Receptacle_GCT_USB4110-GF-A_16P_TopMnt_Horizontal` |
 | J2 | LiPo 3.7 V 3000 mAh | JST-GH 2-pin | `Connector_JST:JST_GH_SM02B-GHS-TB_1x02-1MP_P1.25mm_Horizontal` |
 | J3, J4 | Raspberry Pi CM4 (mating) | 2× Hirose DF40C-100DP-0.4V | `Connector_Hirose_DF40:Hirose_DF40C-100DP-0.4V_2x50-1MP_P0.4mm` |
+| J5, J6 | CSI-2 camera FFC | 15-pin 1.0 mm (JUSHUO AFA07) | `Connector_FFC-FPC:JUSHUO_AFA07-S15FCA-00_1x15-1MP_P1.0mm_Horizontal` |
+| U5 | PCA9544APW | 4-ch I²C mux (2 used) | `Package_SO:TSSOP-20_4.4x6.5mm_P0.65mm` |
+| U7 | AP2112K-3.3 | camera 3.3 V LDO | `Package_TO_SOT_SMD:SOT-23-5` |
 | U1 | BQ24075RGT | DPPM Li-ion charger | `Package_DFN_QFN:VQFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm` |
 | U2 | TPS61088 | 5 V boost converter | `Package_DFN_QFN:QFN-20-1EP_3x3mm_P0.4mm_EP1.65x1.65mm` |
 | U3 | MAX17048G+T | I²C fuel gauge | `Package_DFN_QFN:DFN-8-1EP_2x2mm_P0.5mm_EP0.61x1.42mm` |
@@ -104,6 +117,9 @@ from the root schematic; double-click any sheet box to descend into it.
 | R11 | 10 kΩ | TS bias | `Resistor_SMD:R_0402_1005Metric` |
 | R12, R13 | 1 kΩ | status-LED series | `Resistor_SMD:R_0402_1005Metric` |
 | R14 | 330 Ω | protection VDD series | `Resistor_SMD:R_0402_1005Metric` |
+| R15, R16 | 4.7 kΩ | camera 0 I²C pull-ups | `Resistor_SMD:R_0402_1005Metric` |
+| R17, R18 | 4.7 kΩ | camera 1 I²C pull-ups | `Resistor_SMD:R_0402_1005Metric` |
+| R19, R20 | 4.7 kΩ | I²C0 (mux upstream) pull-ups | `Resistor_SMD:R_0402_1005Metric` |
 | C1 | 1 µF | charger IN decoupling | `Capacitor_SMD:C_0603_1608Metric` |
 | C2 | 10 µF | SYS (OUT) decoupling | `Capacitor_SMD:C_0805_2012Metric` |
 | C10 | 10 µF | BAT decoupling | `Capacitor_SMD:C_0805_2012Metric` |
@@ -115,6 +131,8 @@ from the root schematic; double-click any sheet box to descend into it.
 | C9 | 100 µF | 5 V bulk | `Capacitor_SMD:C_1206_3216Metric` |
 | C11 | 0.1 µF | protection VDD decoupling | `Capacitor_SMD:C_0603_1608Metric` |
 | C12 | 10 µF | CM4 5 V decoupling | `Capacitor_SMD:C_0805_2012Metric` |
+| C13 | 0.1 µF | I²C mux decoupling | `Capacitor_SMD:C_0603_1608Metric` |
+| C14, C15 | 1 µF | camera LDO in/out | `Capacitor_SMD:C_0603_1608Metric` |
 
 ## Notes and caveats
 
@@ -132,6 +150,13 @@ from the root schematic; double-click any sheet box to descend into it.
   fully bootable design you will also want to handle the CM4 control pins per the
   datasheet (`GLOBAL_EN`, `RUN_PG`, `nRPIBOOT`, `SD_*` / eMMC boot, etc.) and
   break out whichever high-speed interfaces you use (e.g. a CSI camera).
+- **Cameras.** The two CSI connectors take standard 15-pin 1.0 mm Pi camera
+  cables. The PCA9544A mux is at I²C address `0x70` (A0–A2 tied low); cam0 is on
+  mux channel 0 and cam1 on channel 1 — reflect this in your `dtoverlay`/
+  libcamera setup (each camera on its own downstream bus). The `IO0`/`IO1`
+  LED/enable lines are wired to CM4 GPIO4–7 and are assignable in software; tie
+  or reassign them to match your camera modules. CAM1's unused two lanes (D2/D3)
+  are left on the CM4 connector.
 - **Footprints** otherwise point at KiCad's standard libraries. Worth
   double-checking in *Assign Footprints* if a name differs:
   - The **inductor** (`L1`) footprint should match the specific high-current
