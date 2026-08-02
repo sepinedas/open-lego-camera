@@ -16,11 +16,12 @@
     "legacy_lib_list": []
   },
   "sheets": [
-    ["a2053281-5c44-4a85-a311-f1d495df0c08", "Root"],
-    ["6ac607ed-8273-4439-aec5-d69c3b168a3f", "Power Input"],
-    ["649d7749-8e9e-4a0b-bbc9-e348fe913b1e", "5V Regulator"],
-    ["d54fbc81-9855-4f8c-b9d2-397f333a2b23", "Battery Monitor"],
-    ["b3385a4e-3140-448f-bdc8-4ec73dac62ac", "Compute Module 4"]
+    ["de8be509-02ff-4a5f-a12c-6d0038f6bb72", "Root"],
+    ["3c05251e-150a-4bf1-ab69-f2c5943ffd55", "Power Input / DPPM Charger"],
+    ["3b86b796-8442-443c-8844-40de3caddd6a", "5V Regulator"],
+    ["22761711-06a0-48bf-a258-7319a5dce399", "Battery Monitor"],
+    ["fa406ce2-134a-445d-810b-d582f8fe6045", "Compute Module 4"],
+    ["dadded41-1be8-4f9a-bb43-c86736f296f1", "Battery Protection"]
   ],
   "text_variables": {}
 }
