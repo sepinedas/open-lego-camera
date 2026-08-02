@@ -1,0 +1,26 @@
+{
+  "board": {},
+  "boards": [],
+  "cvpcb": {"equivalence_files": []},
+  "libraries": {"pinned_footprint_libs": [], "pinned_symbol_libs": []},
+  "meta": {"filename": "cm4-carrier.kicad_pro", "version": 1},
+  "net_settings": {
+    "classes": [
+      {"name": "Default", "clearance": 0.2, "track_width": 0.25,
+       "via_diameter": 0.6, "via_drill": 0.3}
+    ]
+  },
+  "pcbnew": {"page_layout_descr_file": ""},
+  "schematic": {
+    "legacy_lib_dir": "",
+    "legacy_lib_list": []
+  },
+  "sheets": [
+    ["8b00d6f5-c3f5-4949-be2e-989321abbcf4", "Root"],
+    ["ed285242-0041-44d8-ac82-8d21329032a3", "Power Input"],
+    ["84082d5c-e4cc-4d10-895b-bb7bed9976f4", "5V Regulator"],
+    ["8a3fefb9-f874-4423-bf09-3798a0b5e482", "Battery Monitor"],
+    ["c8f260a8-27c0-4040-a232-5afaef7d37aa", "Compute Module 4"]
+  ],
+  "text_variables": {}
+}
