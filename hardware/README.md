@@ -278,8 +278,10 @@ cutout, since the studs give ~8 mm of gap; switch to an `Edge.Cuts` opening only
 if a connector actually protrudes past the carrier.
 
 Notes:
-- The board is currently defined as **2-layer**; a 4-layer stackup is
-  recommended for the CM4's high-speed CSI/DSI/PCIe/USB nets if you route them.
+- The board is a **4-layer** stackup (F.Cu / In1.Cu / In2.Cu / B.Cu, 1.6 mm
+  overall, ENIG) — a signal/GND/PWR/signal arrangement suits the CM4's
+  high-speed CSI/DSI/PCIe/USB nets. Adjust the dielectric thicknesses in
+  *Board Setup → Physical Stackup* to match your fab's 4-layer offering.
 - The display also has the standard **Raspberry Pi 58 × 49 mm hole pattern** on
   its back (for mounting a Pi); this carrier uses the outer 113 × 68 mm studs
   instead. Add the Pi-pattern holes too if you want both.
