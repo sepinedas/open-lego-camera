@@ -261,11 +261,28 @@ Mechanical dimensions were extracted from the display's **STEP model**
   rectangle — aligned to the display's `STUDS-M2_5XH4` back studs, so the carrier
   bolts straight onto the display with M2.5 screws.
 
+The four holes are proper KiCad **`MountingHole` footprints** (`H1`–`H4`,
+`MountingHole_2.7mm_M2.5`, unplated `np_thru_hole` pads) so they show in the BOM
+and are DRC-aware.
+
+There is also a **keepout rule area** ("Display FPC connector clearance") over
+the display's back-side DSI FFC connector, so no components/copper are placed
+where the connector sits in the standoff gap. **Confirm/move it:** the exact
+connector could not be labelled from the STEP assembly graph, so the keepout is
+placed at the best-estimate position (board-local ≈ (10, 42) mm, near the left
+edge) and is a single parameterised rectangle (`FPC_CX/CY/W/H`). The STEP shows
+back-side connectors at board-local ≈ (3,42), (35,45), (69,30), (82–102,76 top
+edge), (99,30) and (121,1) — move the keepout onto whichever is your DSI FFC
+connector (a dashed `Cmts.User` outline marks it). It's a keepout, not a board
+cutout, since the studs give ~8 mm of gap; switch to an `Edge.Cuts` opening only
+if a connector actually protrudes past the carrier.
+
 Notes:
 - The board is currently defined as **2-layer**; a 4-layer stackup is
   recommended for the CM4's high-speed CSI/DSI/PCIe/USB nets if you route them.
-- Mounting holes are drawn as `Edge.Cuts` circle cutouts (unplated screw holes);
-  swap them for KiCad `MountingHole` footprints if you want DRC keepouts.
+- The display also has the standard **Raspberry Pi 58 × 49 mm hole pattern** on
+  its back (for mounting a Pi); this carrier uses the outer 113 × 68 mm studs
+  instead. Add the Pi-pattern holes too if you want both.
 - Written in KiCad 8 board format (`20240108`); KiCad 10 opens it and will offer
   to save in its own format.
 
