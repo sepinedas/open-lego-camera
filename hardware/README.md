@@ -252,13 +252,14 @@ contains **no placed components** — open it and run **Tools → Update PCB fro
 Schematic (F8)** to pull in all the footprints from the schematic (every part
 already has a Footprint field), then place and route.
 
-> ⚠️ **The outline size and hole positions are placeholders.** This environment
-> could not reach the Waveshare page, so the dimensions in the generator are
-> best-guess values, *not* verified against the "5inch DSI LCD (C)" mechanical
-> drawing (a silkscreen note on the board says so). Before fabricating, set the
-> real numbers — overall **W × H**, **hole diameter**, and each **hole X/Y** — to
-> match the display so the carrier actually bolts on. They live at the top of the
-> board file / generator as clearly-marked constants.
+Mechanical dimensions were extracted from the display's **STEP model**
+(`5INCH-DSI-LCD-C-20240612_ASM`):
+
+- **Outline: 120.70 × 77.20 mm** (matches the display module footprint), 3 mm
+  rounded corners.
+- **4× M2.5 mounting holes** (Ø2.75 mm clearance) on a **113.0 × 68.0 mm**
+  rectangle — aligned to the display's `STUDS-M2_5XH4` back studs, so the carrier
+  bolts straight onto the display with M2.5 screws.
 
 Notes:
 - The board is currently defined as **2-layer**; a 4-layer stackup is
