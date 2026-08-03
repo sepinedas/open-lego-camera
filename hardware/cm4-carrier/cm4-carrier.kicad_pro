@@ -16,13 +16,14 @@
     "legacy_lib_list": []
   },
   "sheets": [
-    ["68164e39-daeb-4d86-8c19-ac7cd09b1aca", "Root"],
-    ["ccda2de2-9678-4e89-a38e-956cf7101b4b", "Power Input / DPPM Charger"],
-    ["fc8b6e37-2029-4cba-824e-3d8a0c201b6b", "5V Regulator"],
-    ["81457ab9-36d2-4528-9159-6454ecbff1ae", "Battery Monitor"],
-    ["555bdca8-ae09-4763-8f00-783879f3d990", "Compute Module 4"],
-    ["7eac7c4c-b8ef-445e-a41f-2aa68e37fd7f", "Battery Protection"],
-    ["3ab286d1-9f5e-46b2-8350-c2ae2396a5eb", "Cameras & Display"]
+    ["c714cb6b-329f-4585-a26c-317da9f46ca5", "Root"],
+    ["7f4c6aba-b659-430f-bfc6-fb584187e45a", "Power Input / DPPM Charger"],
+    ["952cf3df-1f55-4a4d-a87c-61f9f67f8c00", "5V Regulator"],
+    ["c52c9516-0962-43be-87af-1bcd6f4ab9fa", "Battery Monitor"],
+    ["ff2f9525-9baf-41de-a455-6d762d757888", "Compute Module 4"],
+    ["73c72c99-0d79-4f76-a6fa-66d96d6d8dd7", "Battery Protection"],
+    ["539bd75a-8b67-4934-a532-f10a1aff395b", "Cameras & Display"],
+    ["48c3d8a8-822b-4ab6-baab-492bbf887bbf", "Boot / microSD & Control"]
   ],
   "text_variables": {}
 }

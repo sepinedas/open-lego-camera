@@ -3,10 +3,11 @@
 A KiCad schematic for a **Raspberry Pi Compute Module 4** carrier board that
 powers the [open-lego-camera](../README.md) from a single-cell LiPo battery,
 with **USB-C charging + Dynamic Power Path Management**, a dedicated
-**battery-protection** stage, **two CSI-2 cameras** and a **DSI display**.
+**battery-protection** stage, **two CSI-2 cameras**, a **DSI display**, and a
+**microSD card with CM4 bring-up controls** (for booting a CM4 Lite).
 
 The design is drawn as a **hierarchical schematic**: a top-level sheet
-(`cm4-carrier.kicad_sch`) instantiates six sub-sheets, one per functional
+(`cm4-carrier.kicad_sch`) instantiates seven sub-sheets, one per functional
 block.
 
 ```
@@ -16,7 +17,8 @@ cm4-carrier.kicad_sch                        (root / top level)
 ├── regulator.kicad_sch           TPS61088 boost converter → 5 V rail
 ├── battery_monitor.kicad_sch     MAX17048 I²C fuel gauge
 ├── cm4.kicad_sch                 Raspberry Pi CM4 (2× DF40C-100DP connectors)
-└── cameras.kicad_sch             2× CSI-2 camera + 1 DSI display + PCA9544A mux
+├── cameras.kicad_sch             2× CSI-2 camera + 1 DSI display + PCA9544A mux
+└── boot_sd.kicad_sch             microSD (CM4 Lite boot) + bring-up controls
 ```
 
 Open `cm4-carrier/cm4-carrier.kicad_pro` in **KiCad 10** (or newer) and start
@@ -92,6 +94,15 @@ from the root schematic; double-click any sheet box to descend into it.
   GPIO8/GPIO9, and its 3.3 V logic comes from the same camera rail. As with the
   standard Raspberry Pi 7″ panel, the display's **5 V panel/backlight power is
   supplied separately** — the FFC carries only DSI + I²C + 3.3 V logic + control.
+- **microSD boot + CM4 bring-up (J8 + controls).** A microSD socket (`J8`) is
+  wired to the CM4's SD interface (`SD_CLK`/`SD_CMD`/`SD_DAT0-3`) so a **CM4 Lite**
+  (no eMMC) boots from card. The card's 3.3 V is gated by a high-side load
+  switch (`Q2`/`Q3`) driven by the CM4's `SD_PWR_ON`, with line pull-ups and a
+  card-detect pull-up. The module bring-up pins are broken out to controls:
+  **`GLOBAL_EN`** (power/enable, `SW1`), **`RUN_PG`** (run/reset, `SW2`) and
+  **`nRPIBOOT`** (USB/rpiboot mode, `SW3`) each with a pull-up and momentary
+  button, plus **power/activity LEDs** (`D3`/`D4` on `PI_LED_nPWR` /
+  `PI_LED_ACT`) and a pulled-up `nEXTRST`. All CM4↔boot nets use global labels.
 
 ## Bill of materials
 
@@ -104,6 +115,11 @@ from the root schematic; double-click any sheet box to descend into it.
 | J7 | DSI display FFC | 15-pin 1.0 mm (JUSHUO AFA07) | `Connector_FFC-FPC:JUSHUO_AFA07-S15FCA-00_1x15-1MP_P1.0mm_Horizontal` |
 | U5 | PCA9544APW | 4-ch I²C mux (3 used) | `Package_SO:TSSOP-20_4.4x6.5mm_P0.65mm` |
 | U7 | AP2112K-3.3 | camera 3.3 V LDO | `Package_TO_SOT_SMD:SOT-23-5` |
+| J8 | microSD socket | Hirose DM3D-SF (push-push) | `Connector_Card:microSD_HC_Hirose_DM3D-SF` |
+| Q2 | DMG2305UX | SD power P-MOSFET (high-side) | `Package_TO_SOT_SMD:SOT-23` |
+| Q3 | 2N7002 | SD switch N-MOSFET | `Package_TO_SOT_SMD:SOT-23` |
+| SW1–SW3 | tact switch | GLOBAL_EN / RUN / nRPIBOOT | `Button_Switch_THT:SW_PUSH_6mm` |
+| D3, D4 | PWR / ACT | status LEDs | `LED_SMD:LED_0603_1608Metric` |
 | U1 | BQ24075RGT | DPPM Li-ion charger | `Package_DFN_QFN:VQFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm` |
 | U2 | TPS61088 | 5 V boost converter | `Package_DFN_QFN:QFN-20-1EP_3x3mm_P0.4mm_EP1.65x1.65mm` |
 | U3 | MAX17048G+T | I²C fuel gauge | `Package_DFN_QFN:DFN-8-1EP_2x2mm_P0.5mm_EP0.61x1.42mm` |
@@ -128,6 +144,13 @@ from the root schematic; double-click any sheet box to descend into it.
 | R17, R18 | 4.7 kΩ | camera 1 I²C pull-ups | `Resistor_SMD:R_0402_1005Metric` |
 | R19, R20 | 4.7 kΩ | I²C0 (mux upstream) pull-ups | `Resistor_SMD:R_0402_1005Metric` |
 | R21, R22 | 4.7 kΩ | DSI display I²C pull-ups | `Resistor_SMD:R_0402_1005Metric` |
+| R23–R27 | 51 kΩ | SD CMD/DAT0-3 pull-ups | `Resistor_SMD:R_0402_1005Metric` |
+| R28 | 51 kΩ | SD card-detect pull-up | `Resistor_SMD:R_0402_1005Metric` |
+| R29 | 100 kΩ | SD switch gate pull-up | `Resistor_SMD:R_0402_1005Metric` |
+| R30, R31 | 100 kΩ | SD_PWR_ON / SD_VDD_Override defaults | `Resistor_SMD:R_0402_1005Metric` |
+| R32 | 100 kΩ | GLOBAL_EN pull-up | `Resistor_SMD:R_0402_1005Metric` |
+| R33–R35 | 10 kΩ | RUN / nRPIBOOT / nEXTRST pull-ups | `Resistor_SMD:R_0402_1005Metric` |
+| R36, R37 | 1 kΩ | status-LED series | `Resistor_SMD:R_0402_1005Metric` |
 | C1 | 1 µF | charger IN decoupling | `Capacitor_SMD:C_0603_1608Metric` |
 | C2 | 10 µF | SYS (OUT) decoupling | `Capacitor_SMD:C_0805_2012Metric` |
 | C10 | 10 µF | BAT decoupling | `Capacitor_SMD:C_0805_2012Metric` |
@@ -141,6 +164,8 @@ from the root schematic; double-click any sheet box to descend into it.
 | C12 | 10 µF | CM4 5 V decoupling | `Capacitor_SMD:C_0805_2012Metric` |
 | C13 | 0.1 µF | I²C mux decoupling | `Capacitor_SMD:C_0603_1608Metric` |
 | C14, C15 | 1 µF | camera LDO in/out | `Capacitor_SMD:C_0603_1608Metric` |
+| C16 | 1 µF | SD card bulk | `Capacitor_SMD:C_0603_1608Metric` |
+| C17 | 100 nF | SD card decoupling | `Capacitor_SMD:C_0603_1608Metric` |
 
 ## Notes and caveats
 
@@ -153,11 +178,20 @@ from the root schematic; double-click any sheet box to descend into it.
 - **CM4 connectors & bring-up.** `J3`/`J4` are the **DF40C-100DP-0.4V** parts on
   the *carrier* that mate with the CM4's DF40C-100DS sockets; pick the stacking
   height (DF40C = 1.5 mm, DF40HC = 3.0 mm) to suit your mechanical stack. Because
-  this is a power/monitor carrier, most CM4 pins are intentionally left
-  unconnected and **will show as unconnected in ERC** — that is expected. For a
-  fully bootable design you will also want to handle the CM4 control pins per the
-  datasheet (`GLOBAL_EN`, `RUN_PG`, `nRPIBOOT`, `SD_*` / eMMC boot, etc.) and
-  break out whichever high-speed interfaces you use (e.g. a CSI camera).
+  this is a focused carrier, the CM4 pins it does not use (many GPIOs, the
+  second HDMI, PCIe, USB, Ethernet, etc.) are intentionally left unconnected and
+  **will show as unconnected in ERC** — that is expected. The boot/control pins
+  (`GLOBAL_EN`, `RUN_PG`, `nRPIBOOT`, `nEXTRST`, the SD interface and the LED
+  outputs) and the CSI/DSI interfaces *are* wired — see the boot and camera
+  sheets.
+- **CM4 Lite vs eMMC / SD power budget.** The microSD boot path targets a **CM4
+  Lite**; on an eMMC CM4 the card is an optional extra boot source. The SD card
+  is powered from the CM4's `CM4_3.3V_Out` through the `SD_PWR_ON` load switch —
+  that rail is current-limited, so if you stack heavy 3.3 V loads (SD + both
+  cameras + display logic) budget it and add a dedicated 3.3 V regulator if
+  needed. The bring-up buttons are momentary: `SW1` (GLOBAL_EN) forces the module
+  off while held, `SW2` (RUN) resets it, and holding `SW3` (nRPIBOOT) at power-up
+  enters USB/rpiboot mode for flashing.
 - **Cameras & display.** The three connectors take standard 15-pin 1.0 mm Pi
   FFC cables. The PCA9544A mux is at I²C address `0x70` (A0–A2 tied low): cam0 =
   channel 0, cam1 = channel 1, DSI display = channel 2 — reflect this in your
