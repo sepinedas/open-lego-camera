@@ -3,11 +3,12 @@
 A KiCad schematic for a **Raspberry Pi Compute Module 4** carrier board that
 powers the [open-lego-camera](../README.md) from a single-cell LiPo battery,
 with **USB-C charging + Dynamic Power Path Management**, a dedicated
-**battery-protection** stage, **two CSI-2 cameras**, a **DSI display**, and a
-**microSD card with CM4 bring-up controls** (for booting a CM4 Lite).
+**battery-protection** stage, **two CSI-2 cameras**, a **DSI display**, a
+**microSD card with CM4 bring-up controls** (for booting a CM4 Lite), and
+**stereo I²S audio** (mics + speaker amps).
 
 The design is drawn as a **hierarchical schematic**: a top-level sheet
-(`cm4-carrier.kicad_sch`) instantiates seven sub-sheets, one per functional
+(`cm4-carrier.kicad_sch`) instantiates eight sub-sheets, one per functional
 block.
 
 ```
@@ -18,7 +19,8 @@ cm4-carrier.kicad_sch                        (root / top level)
 ├── battery_monitor.kicad_sch     MAX17048 I²C fuel gauge
 ├── cm4.kicad_sch                 Raspberry Pi CM4 (2× DF40C-100DP connectors)
 ├── cameras.kicad_sch             2× CSI-2 camera + 1 DSI display + PCA9544A mux
-└── boot_sd.kicad_sch             microSD (CM4 Lite boot) + bring-up controls
+├── boot_sd.kicad_sch             microSD (CM4 Lite boot) + bring-up controls
+└── audio.kicad_sch               stereo I²S mics + class-D amps → speaker out
 ```
 
 Open `cm4-carrier/cm4-carrier.kicad_pro` in **KiCad 10** (or newer) and start
@@ -103,6 +105,15 @@ from the root schematic; double-click any sheet box to descend into it.
   **`nRPIBOOT`** (USB/rpiboot mode, `SW3`) each with a pull-up and momentary
   button, plus **power/activity LEDs** (`D3`/`D4` on `PI_LED_nPWR` /
   `PI_LED_ACT`) and a pulled-up `nEXTRST`. All CM4↔boot nets use global labels.
+- **Stereo I²S audio (U8–U11, J9).** Two **ICS-43434** I²S MEMS microphones
+  (`U8` = Left with `LR`→GND, `U9` = Right with `LR`→VDD) form a stereo mic pair
+  on the CM4's I²S input, and two **MAX98357A** I²S class-D amplifiers (`U10` =
+  Left, `U11` = Right, channel chosen by the `SD_MODE` divider) drive stereo
+  speakers out a **4-pin 1.25 mm** connector (`J9`: `L+`/`L-`/`R+`/`R-`). Everything
+  shares the CM4's single I²S/PCM peripheral (**GPIO18–21**): `BCLK`=GPIO18,
+  `LRCLK`=GPIO19, mic data on `PCM_DIN`=GPIO20, amp data on `PCM_DOUT`=GPIO21.
+  Mics run at 3.3 V; amps at 5 V for full output. The MAX98357A is filterless,
+  so `OUTP`/`OUTN` go straight to the speaker (a BTL/differential load).
 
 ## Bill of materials
 
@@ -120,6 +131,9 @@ from the root schematic; double-click any sheet box to descend into it.
 | Q3 | 2N7002 | SD switch N-MOSFET | `Package_TO_SOT_SMD:SOT-23` |
 | SW1–SW3 | tact switch | GLOBAL_EN / RUN / nRPIBOOT | `Button_Switch_THT:SW_PUSH_6mm` |
 | D3, D4 | PWR / ACT | status LEDs | `LED_SMD:LED_0603_1608Metric` |
+| U8, U9 | ICS-43434 | I²S MEMS mics (L / R) | `Sensor_Audio:InvenSense_ICS-43434-6_3.5x2.65mm` |
+| U10, U11 | MAX98357A | I²S class-D amps (L / R) | `Package_DFN_QFN:TQFN-16-1EP_3x3mm_P0.5mm_EP1.23x1.23mm` |
+| J9 | Stereo speakers | 4-pin 1.25 mm (JST GH) | `Connector_JST:JST_GH_SM04B-GHS-TB_1x04-1MP_P1.25mm_Horizontal` |
 | U1 | BQ24075RGT | DPPM Li-ion charger | `Package_DFN_QFN:VQFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm` |
 | U2 | TPS61088 | 5 V boost converter | `Package_DFN_QFN:QFN-20-1EP_3x3mm_P0.4mm_EP1.65x1.65mm` |
 | U3 | MAX17048G+T | I²C fuel gauge | `Package_DFN_QFN:DFN-8-1EP_2x2mm_P0.5mm_EP0.61x1.42mm` |
@@ -151,6 +165,10 @@ from the root schematic; double-click any sheet box to descend into it.
 | R32 | 100 kΩ | GLOBAL_EN pull-up | `Resistor_SMD:R_0402_1005Metric` |
 | R33–R35 | 10 kΩ | RUN / nRPIBOOT / nEXTRST pull-ups | `Resistor_SMD:R_0402_1005Metric` |
 | R36, R37 | 1 kΩ | status-LED series | `Resistor_SMD:R_0402_1005Metric` |
+| R38, R40 | 1 MΩ | amp SD_MODE divider (top) | `Resistor_SMD:R_0402_1005Metric` |
+| R39 | 100 kΩ | amp L SD_MODE (bottom) | `Resistor_SMD:R_0402_1005Metric` |
+| R41 | 270 kΩ | amp R SD_MODE (bottom) | `Resistor_SMD:R_0402_1005Metric` |
+| R42, R43 | 100 kΩ | amp GAIN_SLOT | `Resistor_SMD:R_0402_1005Metric` |
 | C1 | 1 µF | charger IN decoupling | `Capacitor_SMD:C_0603_1608Metric` |
 | C2 | 10 µF | SYS (OUT) decoupling | `Capacitor_SMD:C_0805_2012Metric` |
 | C10 | 10 µF | BAT decoupling | `Capacitor_SMD:C_0805_2012Metric` |
@@ -166,6 +184,9 @@ from the root schematic; double-click any sheet box to descend into it.
 | C14, C15 | 1 µF | camera LDO in/out | `Capacitor_SMD:C_0603_1608Metric` |
 | C16 | 1 µF | SD card bulk | `Capacitor_SMD:C_0603_1608Metric` |
 | C17 | 100 nF | SD card decoupling | `Capacitor_SMD:C_0603_1608Metric` |
+| C18, C19 | 0.1 µF | mic decoupling | `Capacitor_SMD:C_0603_1608Metric` |
+| C20, C22 | 10 µF | amp VDD bulk | `Capacitor_SMD:C_0805_2012Metric` |
+| C21, C23 | 0.1 µF | amp VDD decoupling | `Capacitor_SMD:C_0603_1608Metric` |
 
 ## Notes and caveats
 
@@ -200,6 +221,15 @@ from the root schematic; double-click any sheet box to descend into it.
   tie or reassign them to match your specific camera/display modules. CAM1's and
   DSI0's unused lanes are left on the CM4 connector. The display's 5 V panel
   power is separate (see above).
+- **Audio.** Both the mics and the amps share the CM4's one I²S peripheral, so
+  full-duplex capture + playback works, but the audio `dtoverlay` must route
+  capture to `PCM_DIN` and playback to `PCM_DOUT`. The MAX98357A **channel
+  select** is set by the DC voltage on `SD_MODE`: the dividers here bias `U10`
+  into the *Left* window and `U11` into the *Right* window — confirm the exact
+  values against the MAX98357A "Channel Selection" table for your VDD. Driving
+  two amps at 5 V into speakers can draw ~3 W each at peak; that comes off the
+  TPS61088 5 V boost, so budget the boost/battery for CM4 + audio peaks (or the
+  amps will pull the rail down before the battery does).
 - **Footprints** otherwise point at KiCad's standard libraries. Worth
   double-checking in *Assign Footprints* if a name differs:
   - The **inductor** (`L1`) footprint should match the specific high-current
