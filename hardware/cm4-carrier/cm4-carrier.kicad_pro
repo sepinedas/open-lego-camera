@@ -16,13 +16,13 @@
     "legacy_lib_list": []
   },
   "sheets": [
-    ["5261f1c5-8601-4e00-981c-a52873d90ff9", "Root"],
-    ["2fad42a0-62fb-4a22-916a-41a65e7de2ff", "Power Input / DPPM Charger"],
-    ["13938c2d-b6df-4af6-98b0-a4df16aac8a7", "5V Regulator"],
-    ["9f851a96-2c10-4982-b91c-0b4bc89c870d", "Battery Monitor"],
-    ["8e496250-c81c-4165-ba63-4542afb0e8de", "Compute Module 4"],
-    ["47e7a882-882d-4d0f-b397-4895976d0f31", "Battery Protection"],
-    ["62b413ed-a2bd-4135-9b4f-10b32db95834", "Cameras (2x CSI-2)"]
+    ["68164e39-daeb-4d86-8c19-ac7cd09b1aca", "Root"],
+    ["ccda2de2-9678-4e89-a38e-956cf7101b4b", "Power Input / DPPM Charger"],
+    ["fc8b6e37-2029-4cba-824e-3d8a0c201b6b", "5V Regulator"],
+    ["81457ab9-36d2-4528-9159-6454ecbff1ae", "Battery Monitor"],
+    ["555bdca8-ae09-4763-8f00-783879f3d990", "Compute Module 4"],
+    ["7eac7c4c-b8ef-445e-a41f-2aa68e37fd7f", "Battery Protection"],
+    ["3ab286d1-9f5e-46b2-8350-c2ae2396a5eb", "Cameras & Display"]
   ],
   "text_variables": {}
 }
