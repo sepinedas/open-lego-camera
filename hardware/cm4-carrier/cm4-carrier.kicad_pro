@@ -1,0 +1,30 @@
+{
+  "board": {},
+  "boards": [],
+  "cvpcb": {"equivalence_files": []},
+  "libraries": {"pinned_footprint_libs": [], "pinned_symbol_libs": []},
+  "meta": {"filename": "cm4-carrier.kicad_pro", "version": 1},
+  "net_settings": {
+    "classes": [
+      {"name": "Default", "clearance": 0.2, "track_width": 0.25,
+       "via_diameter": 0.6, "via_drill": 0.3}
+    ]
+  },
+  "pcbnew": {"page_layout_descr_file": ""},
+  "schematic": {
+    "legacy_lib_dir": "",
+    "legacy_lib_list": []
+  },
+  "sheets": [
+    ["92937ae9-40b7-4c4d-b022-dffb13e5ff19", "Root"],
+    ["def09116-6c29-4f55-a29c-218ea7d7b884", "Power Input / DPPM Charger"],
+    ["dcbfa5a2-3de8-4949-a2f6-16800e5fa744", "5V Regulator"],
+    ["dea7680b-ac94-41c0-ad0f-0d5943418f03", "Battery Monitor"],
+    ["7945d0ad-c0d1-4192-849a-b8ed1670fd66", "Compute Module 4"],
+    ["40349f56-fae9-46dc-8ca0-49254fa564f0", "Battery Protection"],
+    ["0c7db427-150c-4589-936f-fe7e32a60bae", "Cameras & Display"],
+    ["dfb6f791-bb95-478c-b600-9886bd2c8a89", "Boot / microSD & Control"],
+    ["3ca8d8bf-4fb2-4baa-aa70-76e6145a231e", "Stereo Audio"]
+  ],
+  "text_variables": {}
+}
