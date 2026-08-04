@@ -105,6 +105,15 @@ from the root schematic; double-click any sheet box to descend into it.
   **`nRPIBOOT`** (USB/rpiboot mode, `SW3`) each with a pull-up and momentary
   button, plus **power/activity LEDs** (`D3`/`D4` on `PI_LED_nPWR` /
   `PI_LED_ACT`) and a pulled-up `nEXTRST`. All CM4↔boot nets use global labels.
+- **User buttons (SW4–SW6).** Two momentary buttons for **volume up / down**
+  (`SW4`→GPIO22, `SW5`→GPIO23), each with a 10 kΩ pull-up to 3.3 V and a 100 nF
+  RC-debounce cap — read by software to adjust playback level (the MAX98357A has
+  no hardware volume, so use ALSA softvol / the app). One **sleep/wake** button
+  (`SW6`) on **GPIO3**: with `dtoverlay=gpio-shutdown`, a press cleanly halts the
+  CM4 to save battery, and — because GPIO3 is also the wake-from-halt pin — a
+  press wakes it again. GPIO3 doubles as I²C1 `SCL` (already pulled up by the
+  fuel gauge), so it carries no debounce cap; a press briefly holds `SCL` low,
+  which is harmless since it triggers a shutdown/wake.
 - **Stereo I²S audio (U8–U11, J9).** Two **ICS-43434** I²S MEMS microphones
   (`U8` = Left with `LR`→GND, `U9` = Right with `LR`→VDD) form a stereo mic pair
   on the CM4's I²S input, and two **MAX98357A** I²S class-D amplifiers (`U10` =
@@ -130,6 +139,8 @@ from the root schematic; double-click any sheet box to descend into it.
 | Q2 | DMG2305UX | SD power P-MOSFET (high-side) | `Package_TO_SOT_SMD:SOT-23` |
 | Q3 | 2N7002 | SD switch N-MOSFET | `Package_TO_SOT_SMD:SOT-23` |
 | SW1–SW3 | tact switch | GLOBAL_EN / RUN / nRPIBOOT | `Button_Switch_THT:SW_PUSH_6mm` |
+| SW4, SW5 | tact switch | Volume up / down (GPIO22/23) | `Button_Switch_THT:SW_PUSH_6mm` |
+| SW6 | tact switch | Sleep/Wake (GPIO3, gpio-shutdown) | `Button_Switch_THT:SW_PUSH_6mm` |
 | D3, D4 | PWR / ACT | status LEDs | `LED_SMD:LED_0603_1608Metric` |
 | U8, U9 | ICS-43434 | I²S MEMS mics (L / R) | `Sensor_Audio:InvenSense_ICS-43434-6_3.5x2.65mm` |
 | U10, U11 | MAX98357A | I²S class-D amps (L / R) | `Package_DFN_QFN:TQFN-16-1EP_3x3mm_P0.5mm_EP1.23x1.23mm` |
@@ -165,6 +176,7 @@ from the root schematic; double-click any sheet box to descend into it.
 | R32 | 100 kΩ | GLOBAL_EN pull-up | `Resistor_SMD:R_0402_1005Metric` |
 | R33–R35 | 10 kΩ | RUN / nRPIBOOT / nEXTRST pull-ups | `Resistor_SMD:R_0402_1005Metric` |
 | R36, R37 | 1 kΩ | status-LED series | `Resistor_SMD:R_0402_1005Metric` |
+| R44, R45 | 10 kΩ | Vol+/Vol- button pull-ups | `Resistor_SMD:R_0402_1005Metric` |
 | R38, R40 | 1 MΩ | amp SD_MODE divider (top) | `Resistor_SMD:R_0402_1005Metric` |
 | R39 | 100 kΩ | amp L SD_MODE (bottom) | `Resistor_SMD:R_0402_1005Metric` |
 | R41 | 270 kΩ | amp R SD_MODE (bottom) | `Resistor_SMD:R_0402_1005Metric` |
@@ -184,6 +196,7 @@ from the root schematic; double-click any sheet box to descend into it.
 | C14, C15 | 1 µF | camera LDO in/out | `Capacitor_SMD:C_0603_1608Metric` |
 | C16 | 1 µF | SD card bulk | `Capacitor_SMD:C_0603_1608Metric` |
 | C17 | 100 nF | SD card decoupling | `Capacitor_SMD:C_0603_1608Metric` |
+| C24, C25 | 100 nF | Vol+/Vol- button debounce | `Capacitor_SMD:C_0603_1608Metric` |
 | C18, C19 | 0.1 µF | mic decoupling | `Capacitor_SMD:C_0603_1608Metric` |
 | C20, C22 | 10 µF | amp VDD bulk | `Capacitor_SMD:C_0805_2012Metric` |
 | C21, C23 | 0.1 µF | amp VDD decoupling | `Capacitor_SMD:C_0603_1608Metric` |
