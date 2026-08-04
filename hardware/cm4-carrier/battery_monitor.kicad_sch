@@ -137,7 +137,7 @@
 			(effects (font (size 1.27 1.27)) (justify left)))
 		(property "Value" "MAX17048G+T" (at 90.00 63.89 0)
 			(effects (font (size 1.27 1.27)) (justify left)))
-		(property "Footprint" "Package_DFN_QFN:DFN-8-1EP_2x2mm_P0.5mm_EP0.61x1.42mm" (at 90.00 55.00 90)
+		(property "Footprint" "Package_DFN_QFN:DFN-8-1EP_2x2mm_P0.5mm_EP0.9x1.5mm" (at 90.00 55.00 90)
 			(effects (font (size 1.27 1.27)) (hide yes)))
 		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX17048-MAX17049.pdf" (at 90.00 55.00 0)
 			(effects (font (size 1.27 1.27)) (hide yes)))

@@ -128,7 +128,7 @@ from the root schematic; double-click any sheet box to descend into it.
 
 | Ref | Value | Part | Footprint |
 |-----|-------|------|-----------|
-| J1 | USB-C receptacle | GCT USB4110-GF-A | `Connector_USB:USB_C_Receptacle_GCT_USB4110-GF-A_16P_TopMnt_Horizontal` |
+| J1 | USB-C receptacle | GCT USB4110-GF-A | `Connector_USB:USB_C_Receptacle_GCT_USB4110` |
 | J2 | LiPo 3.7 V 3000 mAh | JST-GH 2-pin | `Connector_JST:JST_GH_SM02B-GHS-TB_1x02-1MP_P1.25mm_Horizontal` |
 | J3, J4 | Raspberry Pi CM4 (mating) | 2× Hirose DF40C-100DP-0.4V | `Connector_Hirose_DF40:Hirose_DF40C-100DP-0.4V_2x50-1MP_P0.4mm` |
 | J5, J6 | CSI-2 camera FFC | 15-pin 1.0 mm (JUSHUO AFA07) | `Connector_FFC-FPC:JUSHUO_AFA07-S15FCA-00_1x15-1MP_P1.0mm_Horizontal` |
@@ -145,12 +145,12 @@ from the root schematic; double-click any sheet box to descend into it.
 | U8, U9 | ICS-43434 | I²S MEMS mics (L / R) | `Sensor_Audio:InvenSense_ICS-43434-6_3.5x2.65mm` |
 | U10, U11 | MAX98357A | I²S class-D amps (L / R) | `Package_DFN_QFN:TQFN-16-1EP_3x3mm_P0.5mm_EP1.23x1.23mm` |
 | J9 | Stereo speakers | 4-pin 1.25 mm (JST GH) | `Connector_JST:JST_GH_SM04B-GHS-TB_1x04-1MP_P1.25mm_Horizontal` |
-| U1 | BQ24075RGT | DPPM Li-ion charger | `Package_DFN_QFN:VQFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm` |
+| U1 | BQ24075RGT | DPPM Li-ion charger | `Package_DFN_QFN:QFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm` |
 | U2 | TPS61088 | 5 V boost converter | `Package_DFN_QFN:QFN-20-1EP_3x3mm_P0.4mm_EP1.65x1.65mm` |
-| U3 | MAX17048G+T | I²C fuel gauge | `Package_DFN_QFN:DFN-8-1EP_2x2mm_P0.5mm_EP0.61x1.42mm` |
+| U3 | MAX17048G+T | I²C fuel gauge | `Package_DFN_QFN:DFN-8-1EP_2x2mm_P0.5mm_EP0.9x1.5mm` |
 | U4 | AP9101CK6 | 1-cell protection IC | `Package_TO_SOT_SMD:SOT-23-6` |
 | Q1 | FS8205A | dual N-MOSFET (protection) | `Package_TO_SOT_SMD:SOT-23-6` |
-| L1 | 1 µH | power inductor | `Inductor_SMD:L_Bourns-SRP1265A` |
+| L1 | 1 µH | power inductor | `Inductor_SMD:L_Bourns_SRP1245A` |
 | D1 | CHG | charge-status LED | `LED_SMD:LED_0603_1608Metric` |
 | D2 | PGOOD | power-good LED | `LED_SMD:LED_0603_1608Metric` |
 | RT1 | 10 kΩ NTC | battery thermistor (TS) | `Resistor_SMD:R_0603_1608Metric` |
