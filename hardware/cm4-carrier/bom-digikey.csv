@@ -2,7 +2,7 @@ Quantity,Manufacturer Part Number,Manufacturer,Customer Reference,Description
 1,USB4110-GF-A,GCT,J1,USB-C 2.0 receptacle right-angle SMD
 1,SM02B-GHS-TB(LF)(SN),JST,J2,LiPo battery header JST-GH 2-pin 1.25mm
 2,DF40C-100DP-0.4V(51),Hirose,J3 J4,CM4 mezzanine plug 100-pos 0.4mm (1.5mm stack)
-3,HFW15R-1STE1H1LF,Amphenol ICC,J5 J6 J7,FFC/FPC 15-pos 1.0mm bottom-contact (sub for JUSHUO AFA07)
+3,1-84982-5,TE Connectivity,J5 J6 J7,FFC/FPC 15-pos 1.0mm vertical SMT socket
 1,DM3D-SF,Hirose,J8,microSD push-push card socket
 1,SM04B-GHS-TB(LF)(SN),JST,J9,Stereo speaker header JST-GH 4-pin 1.25mm
 1,BQ24075RGTR,Texas Instruments,U1,DPPM Li-ion charger QFN-16
@@ -18,8 +18,8 @@ Quantity,Manufacturer Part Number,Manufacturer,Customer Reference,Description
 1,2N7002-7,Diodes Incorporated,Q3,N-channel MOSFET SOT-23
 1,SRP1245A-1R0M,Bourns,L1,1uH 29A shielded power inductor
 1,NCP18XH103F03RB,Murata,RT1,10k NTC thermistor 0603
-4,150060GS75000,Wurth Elektronik,D1 D2 D3 D4,LED green 0603
-6,TL1105AF160Q,E-Switch,SW1 SW2 SW3 SW4 SW5 SW6,Tact switch 6mm THT
+4,APA1606ZGC,Kingbright,D1 D2 D3 D4,LED green side-view (right-angle) 1606
+6,PTS645VL39-2 LFS,C&K,SW1 SW2 SW3 SW4 SW5 SW6,Tact switch 6mm side-actuated right-angle THT
 2,RC0402FR-075K1L,Yageo,R1 R2,RES 5.1k 1% 0402
 2,RC0402FR-071K1L,Yageo,R3 R4,RES 1.1k 1% 0402
 1,RC0402FR-0716K2L,Yageo,R6,RES 16.2k 1% 0402

@@ -138,17 +138,17 @@ below for the two substitutions and the ready-to-upload
 | J1 | USB-C receptacle | GCT USB4110-GF-A | GCT `USB4110-GF-A` | `Connector_USB:USB_C_Receptacle_GCT_USB4110` |
 | J2 | LiPo 3.7 V 3000 mAh | JST-GH 2-pin | JST `SM02B-GHS-TB(LF)(SN)` | `Connector_JST:JST_GH_SM02B-GHS-TB_1x02-1MP_P1.25mm_Horizontal` |
 | J3, J4 | Raspberry Pi CM4 (mating) | 2× Hirose DF40C-100DP-0.4V | Hirose `DF40C-100DP-0.4V(51)` ¹ | `Connector_Hirose_DF40:Hirose_DF40C-100DP-0.4V_2x50-1MP_P0.4mm` |
-| J5, J6 | CSI-2 camera FFC | 15-pin 1.0 mm | Amphenol ICC `HFW15R-1STE1H1LF` ² | `Connector_FFC-FPC:JUSHUO_AFA07-S15FCA-00_1x15-1MP_P1.0mm_Horizontal` |
-| J7 | DSI display FFC | 15-pin 1.0 mm | Amphenol ICC `HFW15R-1STE1H1LF` ² | `Connector_FFC-FPC:JUSHUO_AFA07-S15FCA-00_1x15-1MP_P1.0mm_Horizontal` |
+| J5, J6 | CSI-2 camera FFC | 15-pin 1.0 mm **vertical** | TE `1-84982-5` ² | `Connector_FFC-FPC:TE_1-84982-5_2Rows-15Pins-P1.0mm_Vertical` |
+| J7 | DSI display FFC | 15-pin 1.0 mm **vertical** | TE `1-84982-5` ² | `Connector_FFC-FPC:TE_1-84982-5_2Rows-15Pins-P1.0mm_Vertical` |
 | U5 | PCA9544APW | 4-ch I²C mux (3 used) | NXP `PCA9544APW,118` | `Package_SO:TSSOP-20_4.4x6.5mm_P0.65mm` |
 | U7 | AP2112K-3.3 | camera 3.3 V LDO | Diodes `AP2112K-3.3TRG1` | `Package_TO_SOT_SMD:SOT-23-5` |
 | J8 | microSD socket | Hirose DM3D-SF (push-push) | Hirose `DM3D-SF` | `Connector_Card:microSD_HC_Hirose_DM3D-SF` |
 | Q2 | DMG2305UX | SD power P-MOSFET (high-side) | Diodes `DMG2305UX-7` | `Package_TO_SOT_SMD:SOT-23` |
 | Q3 | 2N7002 | SD switch N-MOSFET | Diodes `2N7002-7` | `Package_TO_SOT_SMD:SOT-23` |
-| SW1–SW3 | tact switch | GLOBAL_EN / RUN / nRPIBOOT | E-Switch `TL1105AF160Q` ³ | `Button_Switch_THT:SW_PUSH_6mm` |
-| SW4, SW5 | tact switch | Volume up / down (GPIO22/23) | E-Switch `TL1105AF160Q` ³ | `Button_Switch_THT:SW_PUSH_6mm` |
-| SW6 | tact switch | Sleep/Wake (GPIO3, gpio-shutdown) | E-Switch `TL1105AF160Q` ³ | `Button_Switch_THT:SW_PUSH_6mm` |
-| D3, D4 | PWR / ACT | status LEDs | Würth `150060GS75000` ³ | `LED_SMD:LED_0603_1608Metric` |
+| SW1–SW3 | tact switch (R/A) | GLOBAL_EN / RUN / nRPIBOOT | C&K `PTS645VL39-2 LFS` | `Button_Switch_THT:SW_Tactile_SPST_Angled_PTS645Vx39-2LFS` |
+| SW4, SW5 | tact switch (R/A) | Volume up / down (GPIO22/23) | C&K `PTS645VL39-2 LFS` | `Button_Switch_THT:SW_Tactile_SPST_Angled_PTS645Vx39-2LFS` |
+| SW6 | tact switch (R/A) | Sleep/Wake (GPIO3, gpio-shutdown) | C&K `PTS645VL39-2 LFS` | `Button_Switch_THT:SW_Tactile_SPST_Angled_PTS645Vx39-2LFS` |
+| D3, D4 | PWR / ACT | side-view LEDs | Kingbright `APA1606ZGC` ⁷ | `LED_SMD:LED_Kingbright_APA1606_1.6x0.6mm_Horizontal` |
 | U8, U9 | ICS-43434 | I²S MEMS mics (L / R) | TDK InvenSense `ICS-43434` | `Sensor_Audio:InvenSense_ICS-43434-6_3.5x2.65mm` |
 | U10, U11 | MAX98357A | I²S class-D amps (L / R) | Analog Devices `MAX98357AETE+T` | `Package_DFN_QFN:TQFN-16-1EP_3x3mm_P0.5mm_EP1.23x1.23mm` |
 | J9 | Stereo speakers | 4-pin 1.25 mm (JST GH) | JST `SM04B-GHS-TB(LF)(SN)` | `Connector_JST:JST_GH_SM04B-GHS-TB_1x04-1MP_P1.25mm_Horizontal` |
@@ -158,8 +158,8 @@ below for the two substitutions and the ready-to-upload
 | U4 | AP9101CK6 | 1-cell protection IC | Diodes `AP9101CK6-ADTRG1` ⁴ | `Package_TO_SOT_SMD:SOT-23-6` |
 | Q1 | FS8205A | dual N-MOSFET (protection) | evvo `FS8205A` ⁵ | `Package_TO_SOT_SMD:SOT-23-6` |
 | L1 | 1 µH | power inductor | Bourns `SRP1245A-1R0M` | `Inductor_SMD:L_Bourns_SRP1245A` |
-| D1 | CHG | charge-status LED | Würth `150060GS75000` ³ | `LED_SMD:LED_0603_1608Metric` |
-| D2 | PGOOD | power-good LED | Würth `150060GS75000` ³ | `LED_SMD:LED_0603_1608Metric` |
+| D1 | CHG | charge-status side-view LED | Kingbright `APA1606ZGC` ⁷ | `LED_SMD:LED_Kingbright_APA1606_1.6x0.6mm_Horizontal` |
+| D2 | PGOOD | power-good side-view LED | Kingbright `APA1606ZGC` ⁷ | `LED_SMD:LED_Kingbright_APA1606_1.6x0.6mm_Horizontal` |
 | RT1 | 10 kΩ NTC | battery thermistor (TS) | Murata `NCP18XH103F03RB` | `Resistor_SMD:R_0603_1608Metric` |
 | R1, R2 | 5.1 kΩ | CC pull-downs | Yageo `RC0402FR-075K1L` ³ | `Resistor_SMD:R_0402_1005Metric` |
 | R3 | 1.1 kΩ | ISET (charge current) | Yageo `RC0402FR-071K1L` ³ | `Resistor_SMD:R_0402_1005Metric` |
@@ -218,17 +218,17 @@ superscripts in the table:
    height. Pick the suffix for your mechanical stack — e.g. `(57)`/`(58)` for
    other heights — they share the footprint. Some suffixes go on backorder;
    substitute an in-stock height as needed.
-2. **Camera / DSI FFC (J5/J6/J7).** The original **JUSHUO AFA07-S15FCA-00 is not
-   stocked at Digi-Key**, so the BOM sources the **Amphenol ICC
-   `HFW15R-1STE1H1LF`** (15-position, 1.0 mm pitch, bottom-contact, right-angle,
-   SMD) as a Digi-Key-stocked equivalent. It matches the Raspberry-Pi 15-pin
-   1.0 mm FFC pinout; **verify the footprint/land pattern** against the
-   Amphenol drawing before ordering the boards (the KiCad footprint still
-   references the JUSHUO part). `SFW15R-1STE1LF` is a compatible alternate.
-3. **Representative passives.** Resistors (Yageo `RC0402` 1 %), MLCCs (Samsung
-   `CL`-series X7R/X5R), LEDs (Würth 0603) and tact switches (E-Switch 6 mm THT)
-   are generic — any Digi-Key part at the same value / size / tolerance and a
-   voltage rating ≥ the local rail is a drop-in. Choose LED colour to taste.
+2. **Camera / DSI FFC (J5/J6/J7) — vertical.** These use the **TE Connectivity
+   `1-84982-5`** (15-position, 1.0 mm pitch, **vertical / top-entry**, SMT FPC
+   socket), a Digi-Key-cataloged part that maps to the KiCad footprint
+   `Connector_FFC-FPC:TE_1-84982-5_2Rows-15Pins-P1.0mm_Vertical` (ships with a
+   3D model). It is a **non-ZIF** socket; if you want a ZIF/flip-lock vertical
+   socket, swap the footprint to your chosen part. The previous horizontal
+   JUSHUO/Amphenol option is superseded.
+3. **Representative passives.** Resistors (Yageo `RC0402` 1 %) and MLCCs
+   (Samsung `CL`-series X7R/X5R) are generic — any Digi-Key part at the same
+   value / size / tolerance and a voltage rating ≥ the local rail is a drop-in.
+   (LEDs and switches are now specific parts — see note 7 and the SW rows.)
 4. **Protection IC (U4).** `AP9101CK6` is sold with a suffix that sets the
    over-/under-voltage and over-current thresholds; `-ADTRG1` is a stocked
    1-cell variant. Confirm the trip points for your cell against the Diodes
@@ -239,6 +239,20 @@ superscripts in the table:
 6. **5 V bulk cap (C9).** A 100 µF MLCC in 1206 is at the large end of the size;
    confirm the exact case/voltage on the chosen part (the listed Samsung part
    may be 1210) or split into 2× 47 µF if 1206 height is tight.
+7. **Side-view LEDs (D1–D4).** `APA1606ZGC` is the **green** side-view part;
+   pick the colour per indicator from the same footprint — e.g. `APA1606SURCK`
+   (red), `APA1606SYCK` (yellow), `APA1606QBC/D` (blue). All share the KiCad
+   footprint `LED_SMD:LED_Kingbright_APA1606_1.6x0.6mm_Horizontal`.
+
+**Right-angle / side-mount parts.** The FFC sockets (`TE 1-84982-5`), the tact
+switches (`C&K PTS645VL39-2 LFS`, side-actuated 6 mm THT) and the LEDs
+(`Kingbright APA1606`, side-view) are all right-angle / edge-emitting so they
+sit at the board edge — handy on a display-backpack carrier.
+
+**3D models.** Every footprint used in this design resolves to a KiCad library
+footprint that ships with a 3D model (`.step`/`.wrl`), so *View → 3D Viewer*
+renders the full board. The only exceptions are the `MountingHole` footprints
+(`H1`–`H4`), which are plain holes with no body — expected.
 
 A Digi-Key **BOM Manager**–ready file is provided at
 [`cm4-carrier/bom-digikey.csv`](cm4-carrier/bom-digikey.csv) — upload it under
