@@ -126,80 +126,125 @@ from the root schematic; double-click any sheet box to descend into it.
 
 ## Bill of materials
 
-| Ref | Value | Part | Footprint |
-|-----|-------|------|-----------|
-| J1 | USB-C receptacle | GCT USB4110-GF-A | `Connector_USB:USB_C_Receptacle_GCT_USB4110` |
-| J2 | LiPo 3.7 V 3000 mAh | JST-GH 2-pin | `Connector_JST:JST_GH_SM02B-GHS-TB_1x02-1MP_P1.25mm_Horizontal` |
-| J3, J4 | Raspberry Pi CM4 (mating) | 2× Hirose DF40C-100DP-0.4V | `Connector_Hirose_DF40:Hirose_DF40C-100DP-0.4V_2x50-1MP_P0.4mm` |
-| J5, J6 | CSI-2 camera FFC | 15-pin 1.0 mm (JUSHUO AFA07) | `Connector_FFC-FPC:JUSHUO_AFA07-S15FCA-00_1x15-1MP_P1.0mm_Horizontal` |
-| J7 | DSI display FFC | 15-pin 1.0 mm (JUSHUO AFA07) | `Connector_FFC-FPC:JUSHUO_AFA07-S15FCA-00_1x15-1MP_P1.0mm_Horizontal` |
-| U5 | PCA9544APW | 4-ch I²C mux (3 used) | `Package_SO:TSSOP-20_4.4x6.5mm_P0.65mm` |
-| U7 | AP2112K-3.3 | camera 3.3 V LDO | `Package_TO_SOT_SMD:SOT-23-5` |
-| J8 | microSD socket | Hirose DM3D-SF (push-push) | `Connector_Card:microSD_HC_Hirose_DM3D-SF` |
-| Q2 | DMG2305UX | SD power P-MOSFET (high-side) | `Package_TO_SOT_SMD:SOT-23` |
-| Q3 | 2N7002 | SD switch N-MOSFET | `Package_TO_SOT_SMD:SOT-23` |
-| SW1–SW3 | tact switch | GLOBAL_EN / RUN / nRPIBOOT | `Button_Switch_THT:SW_PUSH_6mm` |
-| SW4, SW5 | tact switch | Volume up / down (GPIO22/23) | `Button_Switch_THT:SW_PUSH_6mm` |
-| SW6 | tact switch | Sleep/Wake (GPIO3, gpio-shutdown) | `Button_Switch_THT:SW_PUSH_6mm` |
-| D3, D4 | PWR / ACT | status LEDs | `LED_SMD:LED_0603_1608Metric` |
-| U8, U9 | ICS-43434 | I²S MEMS mics (L / R) | `Sensor_Audio:InvenSense_ICS-43434-6_3.5x2.65mm` |
-| U10, U11 | MAX98357A | I²S class-D amps (L / R) | `Package_DFN_QFN:TQFN-16-1EP_3x3mm_P0.5mm_EP1.23x1.23mm` |
-| J9 | Stereo speakers | 4-pin 1.25 mm (JST GH) | `Connector_JST:JST_GH_SM04B-GHS-TB_1x04-1MP_P1.25mm_Horizontal` |
-| U1 | BQ24075RGT | DPPM Li-ion charger | `Package_DFN_QFN:QFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm` |
-| U2 | TPS61088 | 5 V boost converter | `Package_DFN_QFN:QFN-20-1EP_3x3mm_P0.4mm_EP1.65x1.65mm` |
-| U3 | MAX17048G+T | I²C fuel gauge | `Package_DFN_QFN:DFN-8-1EP_2x2mm_P0.5mm_EP0.9x1.5mm` |
-| U4 | AP9101CK6 | 1-cell protection IC | `Package_TO_SOT_SMD:SOT-23-6` |
-| Q1 | FS8205A | dual N-MOSFET (protection) | `Package_TO_SOT_SMD:SOT-23-6` |
-| L1 | 1 µH | power inductor | `Inductor_SMD:L_Bourns_SRP1245A` |
-| D1 | CHG | charge-status LED | `LED_SMD:LED_0603_1608Metric` |
-| D2 | PGOOD | power-good LED | `LED_SMD:LED_0603_1608Metric` |
-| RT1 | 10 kΩ NTC | battery thermistor (TS) | `Resistor_SMD:R_0603_1608Metric` |
-| R1, R2 | 5.1 kΩ | CC pull-downs | `Resistor_SMD:R_0402_1005Metric` |
-| R3 | 1.1 kΩ | ISET (charge current) | `Resistor_SMD:R_0402_1005Metric` |
-| R4 | 1.1 kΩ | ILIM (input current limit) | `Resistor_SMD:R_0402_1005Metric` |
-| R5 | 100 kΩ | boost FB divider (top) | `Resistor_SMD:R_0402_1005Metric` |
-| R6 | 16.2 kΩ | boost FB divider (bottom) | `Resistor_SMD:R_0402_1005Metric` |
-| R7, R8 | 4.7 kΩ | I²C pull-ups | `Resistor_SMD:R_0402_1005Metric` |
-| R9 | 10 kΩ | ALRT pull-up | `Resistor_SMD:R_0402_1005Metric` |
-| R10 | 68 kΩ | TMR (safety timer) | `Resistor_SMD:R_0402_1005Metric` |
-| R11 | 10 kΩ | TS bias | `Resistor_SMD:R_0402_1005Metric` |
-| R12, R13 | 1 kΩ | status-LED series | `Resistor_SMD:R_0402_1005Metric` |
-| R14 | 330 Ω | protection VDD series | `Resistor_SMD:R_0402_1005Metric` |
-| R15, R16 | 4.7 kΩ | camera 0 I²C pull-ups | `Resistor_SMD:R_0402_1005Metric` |
-| R17, R18 | 4.7 kΩ | camera 1 I²C pull-ups | `Resistor_SMD:R_0402_1005Metric` |
-| R19, R20 | 4.7 kΩ | I²C0 (mux upstream) pull-ups | `Resistor_SMD:R_0402_1005Metric` |
-| R21, R22 | 4.7 kΩ | DSI display I²C pull-ups | `Resistor_SMD:R_0402_1005Metric` |
-| R23–R27 | 51 kΩ | SD CMD/DAT0-3 pull-ups | `Resistor_SMD:R_0402_1005Metric` |
-| R28 | 51 kΩ | SD card-detect pull-up | `Resistor_SMD:R_0402_1005Metric` |
-| R29 | 100 kΩ | SD switch gate pull-up | `Resistor_SMD:R_0402_1005Metric` |
-| R30, R31 | 100 kΩ | SD_PWR_ON / SD_VDD_Override defaults | `Resistor_SMD:R_0402_1005Metric` |
-| R32 | 100 kΩ | GLOBAL_EN pull-up | `Resistor_SMD:R_0402_1005Metric` |
-| R33–R35 | 10 kΩ | RUN / nRPIBOOT / nEXTRST pull-ups | `Resistor_SMD:R_0402_1005Metric` |
-| R36, R37 | 1 kΩ | status-LED series | `Resistor_SMD:R_0402_1005Metric` |
-| R44, R45 | 10 kΩ | Vol+/Vol- button pull-ups | `Resistor_SMD:R_0402_1005Metric` |
-| R38, R40 | 1 MΩ | amp SD_MODE divider (top) | `Resistor_SMD:R_0402_1005Metric` |
-| R39 | 100 kΩ | amp L SD_MODE (bottom) | `Resistor_SMD:R_0402_1005Metric` |
-| R41 | 270 kΩ | amp R SD_MODE (bottom) | `Resistor_SMD:R_0402_1005Metric` |
-| R42, R43 | 100 kΩ | amp GAIN_SLOT | `Resistor_SMD:R_0402_1005Metric` |
-| C1 | 1 µF | charger IN decoupling | `Capacitor_SMD:C_0603_1608Metric` |
-| C2 | 10 µF | SYS (OUT) decoupling | `Capacitor_SMD:C_0805_2012Metric` |
-| C10 | 10 µF | BAT decoupling | `Capacitor_SMD:C_0805_2012Metric` |
-| C3 | 10 µF | boost input | `Capacitor_SMD:C_0805_2012Metric` |
-| C4, C7 | 22 µF | boost output | `Capacitor_SMD:C_0805_2012Metric` |
-| C5 | 10 nF | COMP | `Capacitor_SMD:C_0603_1608Metric` |
-| C6 | 4.7 nF | soft-start | `Capacitor_SMD:C_0603_1608Metric` |
-| C8 | 1 µF | fuel-gauge decoupling | `Capacitor_SMD:C_0603_1608Metric` |
-| C9 | 100 µF | 5 V bulk | `Capacitor_SMD:C_1206_3216Metric` |
-| C11 | 0.1 µF | protection VDD decoupling | `Capacitor_SMD:C_0603_1608Metric` |
-| C12 | 10 µF | CM4 5 V decoupling | `Capacitor_SMD:C_0805_2012Metric` |
-| C13 | 0.1 µF | I²C mux decoupling | `Capacitor_SMD:C_0603_1608Metric` |
-| C14, C15 | 1 µF | camera LDO in/out | `Capacitor_SMD:C_0603_1608Metric` |
-| C16 | 1 µF | SD card bulk | `Capacitor_SMD:C_0603_1608Metric` |
-| C17 | 100 nF | SD card decoupling | `Capacitor_SMD:C_0603_1608Metric` |
-| C24, C25 | 100 nF | Vol+/Vol- button debounce | `Capacitor_SMD:C_0603_1608Metric` |
-| C18, C19 | 0.1 µF | mic decoupling | `Capacitor_SMD:C_0603_1608Metric` |
-| C20, C22 | 10 µF | amp VDD bulk | `Capacitor_SMD:C_0805_2012Metric` |
-| C21, C23 | 0.1 µF | amp VDD decoupling | `Capacitor_SMD:C_0603_1608Metric` |
+Every line is orderable from **Digi-Key**. The **Mfr P/N** column is the
+Digi-Key–searchable manufacturer part number; passive-component MPNs are
+*representative* Digi-Key-stocked equivalents (any part of the same
+value / size / tolerance / voltage works). See **[Digi-Key sourcing](#digi-key-sourcing)**
+below for the two substitutions and the ready-to-upload
+[`cm4-carrier/bom-digikey.csv`](cm4-carrier/bom-digikey.csv).
+
+| Ref | Value | Part | Mfr P/N (Digi-Key) | Footprint |
+|-----|-------|------|--------------------|-----------|
+| J1 | USB-C receptacle | GCT USB4110-GF-A | GCT `USB4110-GF-A` | `Connector_USB:USB_C_Receptacle_GCT_USB4110` |
+| J2 | LiPo 3.7 V 3000 mAh | JST-GH 2-pin | JST `SM02B-GHS-TB(LF)(SN)` | `Connector_JST:JST_GH_SM02B-GHS-TB_1x02-1MP_P1.25mm_Horizontal` |
+| J3, J4 | Raspberry Pi CM4 (mating) | 2× Hirose DF40C-100DP-0.4V | Hirose `DF40C-100DP-0.4V(51)` ¹ | `Connector_Hirose_DF40:Hirose_DF40C-100DP-0.4V_2x50-1MP_P0.4mm` |
+| J5, J6 | CSI-2 camera FFC | 15-pin 1.0 mm | Amphenol ICC `HFW15R-1STE1H1LF` ² | `Connector_FFC-FPC:JUSHUO_AFA07-S15FCA-00_1x15-1MP_P1.0mm_Horizontal` |
+| J7 | DSI display FFC | 15-pin 1.0 mm | Amphenol ICC `HFW15R-1STE1H1LF` ² | `Connector_FFC-FPC:JUSHUO_AFA07-S15FCA-00_1x15-1MP_P1.0mm_Horizontal` |
+| U5 | PCA9544APW | 4-ch I²C mux (3 used) | NXP `PCA9544APW,118` | `Package_SO:TSSOP-20_4.4x6.5mm_P0.65mm` |
+| U7 | AP2112K-3.3 | camera 3.3 V LDO | Diodes `AP2112K-3.3TRG1` | `Package_TO_SOT_SMD:SOT-23-5` |
+| J8 | microSD socket | Hirose DM3D-SF (push-push) | Hirose `DM3D-SF` | `Connector_Card:microSD_HC_Hirose_DM3D-SF` |
+| Q2 | DMG2305UX | SD power P-MOSFET (high-side) | Diodes `DMG2305UX-7` | `Package_TO_SOT_SMD:SOT-23` |
+| Q3 | 2N7002 | SD switch N-MOSFET | Diodes `2N7002-7` | `Package_TO_SOT_SMD:SOT-23` |
+| SW1–SW3 | tact switch | GLOBAL_EN / RUN / nRPIBOOT | E-Switch `TL1105AF160Q` ³ | `Button_Switch_THT:SW_PUSH_6mm` |
+| SW4, SW5 | tact switch | Volume up / down (GPIO22/23) | E-Switch `TL1105AF160Q` ³ | `Button_Switch_THT:SW_PUSH_6mm` |
+| SW6 | tact switch | Sleep/Wake (GPIO3, gpio-shutdown) | E-Switch `TL1105AF160Q` ³ | `Button_Switch_THT:SW_PUSH_6mm` |
+| D3, D4 | PWR / ACT | status LEDs | Würth `150060GS75000` ³ | `LED_SMD:LED_0603_1608Metric` |
+| U8, U9 | ICS-43434 | I²S MEMS mics (L / R) | TDK InvenSense `ICS-43434` | `Sensor_Audio:InvenSense_ICS-43434-6_3.5x2.65mm` |
+| U10, U11 | MAX98357A | I²S class-D amps (L / R) | Analog Devices `MAX98357AETE+T` | `Package_DFN_QFN:TQFN-16-1EP_3x3mm_P0.5mm_EP1.23x1.23mm` |
+| J9 | Stereo speakers | 4-pin 1.25 mm (JST GH) | JST `SM04B-GHS-TB(LF)(SN)` | `Connector_JST:JST_GH_SM04B-GHS-TB_1x04-1MP_P1.25mm_Horizontal` |
+| U1 | BQ24075RGT | DPPM Li-ion charger | TI `BQ24075RGTR` | `Package_DFN_QFN:QFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm` |
+| U2 | TPS61088 | 5 V boost converter | TI `TPS61088RHLR` | `Package_DFN_QFN:QFN-20-1EP_3x3mm_P0.4mm_EP1.65x1.65mm` |
+| U3 | MAX17048G+T | I²C fuel gauge | Analog Devices `MAX17048G+T10` | `Package_DFN_QFN:DFN-8-1EP_2x2mm_P0.5mm_EP0.9x1.5mm` |
+| U4 | AP9101CK6 | 1-cell protection IC | Diodes `AP9101CK6-ADTRG1` ⁴ | `Package_TO_SOT_SMD:SOT-23-6` |
+| Q1 | FS8205A | dual N-MOSFET (protection) | evvo `FS8205A` ⁵ | `Package_TO_SOT_SMD:SOT-23-6` |
+| L1 | 1 µH | power inductor | Bourns `SRP1245A-1R0M` | `Inductor_SMD:L_Bourns_SRP1245A` |
+| D1 | CHG | charge-status LED | Würth `150060GS75000` ³ | `LED_SMD:LED_0603_1608Metric` |
+| D2 | PGOOD | power-good LED | Würth `150060GS75000` ³ | `LED_SMD:LED_0603_1608Metric` |
+| RT1 | 10 kΩ NTC | battery thermistor (TS) | Murata `NCP18XH103F03RB` | `Resistor_SMD:R_0603_1608Metric` |
+| R1, R2 | 5.1 kΩ | CC pull-downs | Yageo `RC0402FR-075K1L` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R3 | 1.1 kΩ | ISET (charge current) | Yageo `RC0402FR-071K1L` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R4 | 1.1 kΩ | ILIM (input current limit) | Yageo `RC0402FR-071K1L` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R5 | 100 kΩ | boost FB divider (top) | Yageo `RC0402FR-07100KL` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R6 | 16.2 kΩ | boost FB divider (bottom) | Yageo `RC0402FR-0716K2L` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R7, R8 | 4.7 kΩ | I²C pull-ups | Yageo `RC0402FR-074K7L` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R9 | 10 kΩ | ALRT pull-up | Yageo `RC0402FR-0710KL` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R10 | 68 kΩ | TMR (safety timer) | Yageo `RC0402FR-0768KL` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R11 | 10 kΩ | TS bias | Yageo `RC0402FR-0710KL` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R12, R13 | 1 kΩ | status-LED series | Yageo `RC0402FR-071KL` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R14 | 330 Ω | protection VDD series | Yageo `RC0402FR-07330RL` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R15, R16 | 4.7 kΩ | camera 0 I²C pull-ups | Yageo `RC0402FR-074K7L` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R17, R18 | 4.7 kΩ | camera 1 I²C pull-ups | Yageo `RC0402FR-074K7L` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R19, R20 | 4.7 kΩ | I²C0 (mux upstream) pull-ups | Yageo `RC0402FR-074K7L` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R21, R22 | 4.7 kΩ | DSI display I²C pull-ups | Yageo `RC0402FR-074K7L` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R23–R27 | 51 kΩ | SD CMD/DAT0-3 pull-ups | Yageo `RC0402FR-0751KL` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R28 | 51 kΩ | SD card-detect pull-up | Yageo `RC0402FR-0751KL` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R29 | 100 kΩ | SD switch gate pull-up | Yageo `RC0402FR-07100KL` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R30, R31 | 100 kΩ | SD_PWR_ON / SD_VDD_Override defaults | Yageo `RC0402FR-07100KL` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R32 | 100 kΩ | GLOBAL_EN pull-up | Yageo `RC0402FR-07100KL` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R33–R35 | 10 kΩ | RUN / nRPIBOOT / nEXTRST pull-ups | Yageo `RC0402FR-0710KL` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R36, R37 | 1 kΩ | status-LED series | Yageo `RC0402FR-071KL` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R44, R45 | 10 kΩ | Vol+/Vol- button pull-ups | Yageo `RC0402FR-0710KL` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R38, R40 | 1 MΩ | amp SD_MODE divider (top) | Yageo `RC0402FR-071ML` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R39 | 100 kΩ | amp L SD_MODE (bottom) | Yageo `RC0402FR-07100KL` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R41 | 270 kΩ | amp R SD_MODE (bottom) | Yageo `RC0402FR-07270KL` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| R42, R43 | 100 kΩ | amp GAIN_SLOT | Yageo `RC0402FR-07100KL` ³ | `Resistor_SMD:R_0402_1005Metric` |
+| C1 | 1 µF | charger IN decoupling | Samsung `CL10B105KA8NNNC` ³ | `Capacitor_SMD:C_0603_1608Metric` |
+| C2 | 10 µF | SYS (OUT) decoupling | Samsung `CL21A106KAYNNNE` ³ | `Capacitor_SMD:C_0805_2012Metric` |
+| C10 | 10 µF | BAT decoupling | Samsung `CL21A106KAYNNNE` ³ | `Capacitor_SMD:C_0805_2012Metric` |
+| C3 | 10 µF | boost input | Samsung `CL21A106KAYNNNE` ³ | `Capacitor_SMD:C_0805_2012Metric` |
+| C4, C7 | 22 µF | boost output | Samsung `CL21A226MAYNNNE` ³ | `Capacitor_SMD:C_0805_2012Metric` |
+| C5 | 10 nF | COMP | Samsung `CL10B103KB8NNNC` ³ | `Capacitor_SMD:C_0603_1608Metric` |
+| C6 | 4.7 nF | soft-start | Samsung `CL10B472KB8NNNC` ³ | `Capacitor_SMD:C_0603_1608Metric` |
+| C8 | 1 µF | fuel-gauge decoupling | Samsung `CL10B105KA8NNNC` ³ | `Capacitor_SMD:C_0603_1608Metric` |
+| C9 | 100 µF | 5 V bulk | Samsung `CL31A107MQHNNNE` ³ ⁶ | `Capacitor_SMD:C_1206_3216Metric` |
+| C11 | 0.1 µF | protection VDD decoupling | Samsung `CL10B104KB8NNNC` ³ | `Capacitor_SMD:C_0603_1608Metric` |
+| C12 | 10 µF | CM4 5 V decoupling | Samsung `CL21A106KAYNNNE` ³ | `Capacitor_SMD:C_0805_2012Metric` |
+| C13 | 0.1 µF | I²C mux decoupling | Samsung `CL10B104KB8NNNC` ³ | `Capacitor_SMD:C_0603_1608Metric` |
+| C14, C15 | 1 µF | camera LDO in/out | Samsung `CL10B105KA8NNNC` ³ | `Capacitor_SMD:C_0603_1608Metric` |
+| C16 | 1 µF | SD card bulk | Samsung `CL10B105KA8NNNC` ³ | `Capacitor_SMD:C_0603_1608Metric` |
+| C17 | 100 nF | SD card decoupling | Samsung `CL10B104KB8NNNC` ³ | `Capacitor_SMD:C_0603_1608Metric` |
+| C24, C25 | 100 nF | Vol+/Vol- button debounce | Samsung `CL10B104KB8NNNC` ³ | `Capacitor_SMD:C_0603_1608Metric` |
+| C18, C19 | 0.1 µF | mic decoupling | Samsung `CL10B104KB8NNNC` ³ | `Capacitor_SMD:C_0603_1608Metric` |
+| C20, C22 | 10 µF | amp VDD bulk | Samsung `CL21A106KAYNNNE` ³ | `Capacitor_SMD:C_0805_2012Metric` |
+| C21, C23 | 0.1 µF | amp VDD decoupling | Samsung `CL10B104KB8NNNC` ³ | `Capacitor_SMD:C_0603_1608Metric` |
+
+<a name="digi-key-sourcing"></a>
+### Digi-Key sourcing
+
+All parts above were checked against the Digi-Key catalogue. Notes keyed to the
+superscripts in the table:
+
+1. **CM4 mezzanine (J3/J4).** `DF40C-100DP-0.4V(51)` is the **1.5 mm** stacking
+   height. Pick the suffix for your mechanical stack — e.g. `(57)`/`(58)` for
+   other heights — they share the footprint. Some suffixes go on backorder;
+   substitute an in-stock height as needed.
+2. **Camera / DSI FFC (J5/J6/J7).** The original **JUSHUO AFA07-S15FCA-00 is not
+   stocked at Digi-Key**, so the BOM sources the **Amphenol ICC
+   `HFW15R-1STE1H1LF`** (15-position, 1.0 mm pitch, bottom-contact, right-angle,
+   SMD) as a Digi-Key-stocked equivalent. It matches the Raspberry-Pi 15-pin
+   1.0 mm FFC pinout; **verify the footprint/land pattern** against the
+   Amphenol drawing before ordering the boards (the KiCad footprint still
+   references the JUSHUO part). `SFW15R-1STE1LF` is a compatible alternate.
+3. **Representative passives.** Resistors (Yageo `RC0402` 1 %), MLCCs (Samsung
+   `CL`-series X7R/X5R), LEDs (Würth 0603) and tact switches (E-Switch 6 mm THT)
+   are generic — any Digi-Key part at the same value / size / tolerance and a
+   voltage rating ≥ the local rail is a drop-in. Choose LED colour to taste.
+4. **Protection IC (U4).** `AP9101CK6` is sold with a suffix that sets the
+   over-/under-voltage and over-current thresholds; `-ADTRG1` is a stocked
+   1-cell variant. Confirm the trip points for your cell against the Diodes
+   datasheet and pick the matching suffix.
+5. **Protection MOSFET (Q1).** The `FS8205A` is stocked at Digi-Key under the
+   **evvo** brand. Any pin-compatible SOT-23-6 dual-N battery-protection MOSFET
+   (e.g. AO8810) is an equivalent.
+6. **5 V bulk cap (C9).** A 100 µF MLCC in 1206 is at the large end of the size;
+   confirm the exact case/voltage on the chosen part (the listed Samsung part
+   may be 1210) or split into 2× 47 µF if 1206 height is tight.
+
+A Digi-Key **BOM Manager**–ready file is provided at
+[`cm4-carrier/bom-digikey.csv`](cm4-carrier/bom-digikey.csv) — upload it under
+*myLists → Create new list → Import* to price and cart the whole board. Its
+`Manufacturer Part Number` column drives Digi-Key's line matching; the
+`Customer Reference` column carries the reference designators.
 
 ## Notes and caveats
 
