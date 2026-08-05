@@ -246,6 +246,35 @@ A Digi-Key **BOM Manager**–ready file is provided at
 `Manufacturer Part Number` column drives Digi-Key's line matching; the
 `Customer Reference` column carries the reference designators.
 
+## Errata — symbol pad mapping (Update PCB from Schematic)
+
+Three custom symbols were drawn with pin **numbers** set to signal *names*
+instead of the assigned footprint's pad identifiers, so **Update PCB from
+Schematic (F8)** failed with `pad … not found` errors. Fixed:
+
+- **J1 (USB4110-GF-A).** Shield pin renumbered `S1` → `SH` to match the four
+  `SH` shield pads in `Connector_USB:USB_C_Receptacle_GCT_USB4110`.
+- **U3 (MAX17048, DFN-8-1EP).** Pins renumbered to the datasheet TDFN pads
+  (`CELL`=2, `GND`=4, `ALRT`=5, `QSTRT`=6, `SCL`=7, `SDA`=8) and the previously
+  missing **`VDD`=3, `CTG`=1 and exposed pad =9** added. `VDD` is tied to the
+  `CELL`/`VBAT` node (decoupled by `C8`) and `CTG`/`EP` to `GND`, so the gauge
+  is now actually powered — the earlier 6-pin symbol left `VDD`/`CTG`/`EP`
+  unconnected.
+- **U2 (TPS61088, QFN-20-1EP).** The 10-pin functional symbol was remapped to
+  the real 20-pin RHL pinout (`VCC`=1, `EN`=2, `FSW`=3, `SW`=4–7, `BOOT`=8,
+  `VIN`=9, `SS`=10, NC=11/12, `MODE`=13, `VOUT`=14–16, `FB`=17, `COMP`=18,
+  `ILIM`=19, `AGND`=20, `PGND`=EP/21). The paralleled `SW` and `VOUT` pads are
+  stacked onto their nets so every power pad is connected.
+
+  > **Action required before fabrication (U2).** The boost converter still
+  > needs its support network, now exposed as unconnected pins that ERC will
+  > flag: **`VCC`** → 1 µF bypass to `GND`; **`BOOT`** → 0.1 µF to `SW`;
+  > **`FSW`** → resistor to `SW` (sets switching frequency); **`ILIM`** →
+  > resistor to `AGND` (sets switch current limit). Take the `FSW`/`ILIM`
+  > resistor values from the TPS61088 datasheet for your target frequency and
+  > current limit — they were **not** guessed here. `FB`/`COMP`/`SS` are already
+  > wired (`R5`/`R6`, `C5`, `C6`).
+
 ## Notes and caveats
 
 - **This is a schematic-only deliverable** — no PCB layout is included yet.
